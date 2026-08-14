@@ -1,0 +1,16 @@
+[
+  {"id":"domain.programming","signals":["code","код","python","javascript"],"moduleIds":["full_runnable_code","tests","code_dependencies"]},
+  {"id":"domain.technology","signals":["device","устройство","version","версия"],"moduleIds":["version_compatibility","safe_checks"]},
+  {"id":"domain.diagnostics","signals":["error","ошибка","зависает","crash"],"moduleIds":["diagnose_causes","rank_causes","verify_fix"]},
+  {"id":"domain.products","signals":["купить","buy","модель","product"],"moduleIds":["purchase_criteria","price_availability_current"]},
+  {"id":"domain.vehicles","signals":["автомобиль","машина","car","vehicle"],"moduleIds":["compare_total_cost","verify_revisions"]},
+  {"id":"domain.data","signals":["dataset","данные","csv","statistics"],"moduleIds":["data_validate","data_method_fit"]},
+  {"id":"domain.documents","signals":["document","документ","contract","договор"],"moduleIds":["preserve_source_facts","document_risks"]},
+  {"id":"domain.learning","signals":["научи","learn","урок","lesson"],"moduleIds":["learning_progression","learning_examples"]},
+  {"id":"domain.writing","signals":["текст","write","письмо","email"],"moduleIds":["rewrite_preserve_meaning","rewrite_tone"]},
+  {"id":"domain.creative","signals":["рассказ","story","image","изображение"],"moduleIds":["creative_coherence","brainstorm_constraints"]},
+  {"id":"domain.current","signals":["сейчас","currently","latest","актуальный"],"moduleIds":["current_sources","current_dates"]},
+  {"id":"domain.legal","signals":["закон","legal","court","суд"],"moduleIds":["legal_sources_jurisdiction","source_uncertainty"]},
+  {"id":"domain.medical","signals":["диагноз","medical","symptom","лечение"],"moduleIds":["medical_uncertainty","current_sources"]},
+  {"id":"domain.financial","signals":["investment","инвестиции","loan","кредит"],"moduleIds":["financial_risk","current_dates"]}
+]

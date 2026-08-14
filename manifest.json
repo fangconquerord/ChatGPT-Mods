@@ -1,14 +1,19 @@
 {
   "manifest_version": 3,
   "name": "ChatGPT Mods",
-  "version": "1.1.2",
-  "description": "Быстрая навигация по вопросам пользователя в текущем чате на chatgpt.com.",
+  "version": "1.2.1",
+  "description": "Локальные улучшения интерфейса ChatGPT на chatgpt.com.",
   "host_permissions": [
     "https://chatgpt.com/*"
   ],
   "permissions": [
-    "storage"
+    "storage",
+    "activeTab",
+    "downloads"
   ],
+  "background": {
+    "service_worker": "background.js"
+  },
   "icons": {
     "16": "icons/16x16.png",
     "24": "icons/24x24.png",
@@ -17,6 +22,7 @@
     "128": "icons/128x128.png"
   },
   "action": {
+    "default_popup": "popup.html",
     "default_icon": {
       "16": "icons/16x16.png",
       "24": "icons/24x24.png",
@@ -31,24 +37,37 @@
         "https://chatgpt.com/*"
       ],
       "js": [
-        "content-nav.js"
-      ],
-      "css": [
-        "styles.css"
+        "content-settings.js",
+        "content-chat-exporter.js",
+        "content-chat-organizer.js",
+        "prompt-compiler/namespace.js",
+        "prompt-compiler/types.js",
+        "prompt-compiler/rules-bundle.js",
+        "prompt-compiler/normalization.js",
+        "prompt-compiler/protection.js",
+        "prompt-compiler/language.js",
+        "prompt-compiler/segmentation.js",
+        "prompt-compiler/classifier.js",
+        "prompt-compiler/extraction.js",
+        "prompt-compiler/context.js",
+        "prompt-compiler/ambiguity.js",
+        "prompt-compiler/planner.js",
+        "prompt-compiler/synthesis.js",
+        "prompt-compiler/renderer.js",
+        "prompt-compiler/candidates.js",
+        "prompt-compiler/scoring.js",
+        "prompt-compiler/validation.js",
+        "prompt-compiler/diagnostics.js",
+        "prompt-compiler/rules-loader.js",
+        "prompt-compiler/pipeline.js",
+        "prompt-compiler/index.js",
+        "content-temp-chat.js",
+        "content-message-meta.js",
+        "content-prompt-enhancer.js",
+        "content-split-view.js"
       ],
       "run_at": "document_idle",
       "all_frames": true
-    },
-    {
-      "matches": [
-        "https://chatgpt.com/*"
-      ],
-      "js": [
-        "content-temp-chat.js",
-        "content-message-meta.js",
-        "content-split-view.js"
-      ],
-      "run_at": "document_idle"
     }
   ]
 }

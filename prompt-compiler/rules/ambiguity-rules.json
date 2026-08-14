@@ -1,0 +1,31 @@
+{
+  "maxQuestions": 3,
+  "questions": {
+    "ru": {
+      "purpose": "Какое назначение программы и какую задачу она должна решать?",
+      "expected_result": "Какие входные данные и результат ожидаются?",
+      "comparison_objects": "Какие именно объекты нужно сравнить?",
+      "source_text": "Какой исходный текст или материал нужно обработать?",
+      "target_language": "На какой язык нужен перевод?",
+      "error_or_symptom": "Как проявляется ошибка и какое поведение ожидалось?",
+      "subject": "О какой компании, организации или объекте идёт речь?",
+      "input_data": "Какие исходные данные нужно обработать?",
+      "document": "Какой документ или его фрагмент нужно проанализировать?",
+      "topic": "Какова конкретная тема или предмет задачи?",
+      "output_format": "В каком точном формате нужен результат?"
+    },
+    "en": {
+      "purpose": "What is the program for, and what task must it solve?",
+      "expected_result": "What input and output are expected?",
+      "comparison_objects": "Which exact objects should be compared?",
+      "source_text": "What source text or material should be processed?",
+      "target_language": "Which target language should be used?",
+      "error_or_symptom": "How does the problem appear, and what behavior was expected?",
+      "subject": "Which company, organization, or subject do you mean?",
+      "input_data": "What source data should be processed?",
+      "document": "Which document or excerpt should be analyzed?",
+      "topic": "What is the specific topic or subject of the task?",
+      "output_format": "What exact output format is required?"
+    }
+  }
+}

@@ -1,0 +1,197 @@
+[
+  {
+    "id": "simple_question", "description": {"ru": "Короткий однозначный вопрос", "en": "Short unambiguous question"}, "priority": 1,
+    "triggers": {"ru": {"strong": ["сколько будет", "кто такой"], "positive": ["что", "кто", "где", "когда"], "weak": ["?"], "negative": ["сравни", "напиши код"], "requiredCombinations": []}, "en": {"strong": ["how much is", "who is"], "positive": ["what", "who", "where", "when"], "weak": ["?"], "negative": ["compare", "write code"], "requiredCombinations": []}},
+    "patterns": ["question"], "expectedSlots": ["topic"], "criticalSlots": [], "moduleIds": ["direct_answer_first", "concise_simple"], "incompatibleModuleIds": ["clarify_critical_only"], "bypassRuleIds": ["short_question"], "confidence": {"base": 0.45, "perStrong": 0.2}
+  },
+  {
+    "id": "explanation", "description": {"ru": "Объяснение понятия или процесса", "en": "Explanation of a concept or process"}, "priority": 5,
+    "triggers": {"ru": {"strong": ["объясни", "как работает", "простыми словами"], "positive": ["почему", "разъясни"], "weak": ["понять"], "negative": ["только переведи"], "requiredCombinations": []}, "en": {"strong": ["explain", "how does", "in simple terms"], "positive": ["why", "clarify"], "weak": ["understand"], "negative": ["translate only"], "requiredCombinations": []}},
+    "patterns": ["explanation_request"], "expectedSlots": ["topic"], "criticalSlots": [], "moduleIds": ["explain_plain", "direct_answer_first", "learning_examples"], "incompatibleModuleIds": [], "bypassRuleIds": [], "confidence": {"base": 0.5, "perStrong": 0.18}
+  },
+  {
+    "id": "definition", "description": {"ru": "Определение термина", "en": "Definition of a term"}, "priority": 6,
+    "triggers": {"ru": {"strong": ["что такое", "что означает", "дай определение"], "positive": ["значение термина"], "weak": ["термин"], "negative": ["сравни"], "requiredCombinations": []}, "en": {"strong": ["what is", "what does", "define"], "positive": ["meaning of"], "weak": ["term"], "negative": ["compare"], "requiredCombinations": []}},
+    "patterns": ["definition_question"], "expectedSlots": ["topic"], "criticalSlots": [], "moduleIds": ["define_then_example", "concise_simple"], "incompatibleModuleIds": [], "bypassRuleIds": ["short_definition"], "confidence": {"base": 0.55, "perStrong": 0.2}
+  },
+  {
+    "id": "comparison", "description": {"ru": "Сопоставление двух или более объектов", "en": "Comparison of two or more objects"}, "priority": 12,
+    "triggers": {"ru": {"strong": ["сравни", "чем отличается", "найди отличия"], "positive": ["разница", "против"], "weak": ["лучше"], "negative": ["не сравнивай"], "requiredCombinations": [["между", "и"]]}, "en": {"strong": ["compare", "difference between", "versus"], "positive": ["differences", " vs "], "weak": ["better"], "negative": ["do not compare"], "requiredCombinations": [["between", "and"]]}},
+    "patterns": ["comparison_pair"], "expectedSlots": ["comparison_objects", "use_case"], "criticalSlots": ["comparison_objects"], "moduleIds": ["compare_practical", "compare_table", "compare_tradeoffs", "recommendation_by_scenario", "verify_revisions"], "incompatibleModuleIds": ["concise_simple"], "bypassRuleIds": [], "confidence": {"base": 0.6, "perStrong": 0.16}
+  },
+  {
+    "id": "recommendation", "description": {"ru": "Рекомендация варианта", "en": "Recommendation of an option"}, "priority": 9,
+    "triggers": {"ru": {"strong": ["посоветуй", "порекомендуй", "что выбрать"], "positive": ["подскажи вариант", "лучше взять"], "weak": ["лучший"], "negative": ["без рекомендации"], "requiredCombinations": []}, "en": {"strong": ["recommend", "what should i choose", "suggest"], "positive": ["best option", "which one"], "weak": ["best"], "negative": ["no recommendation"], "requiredCombinations": []}},
+    "patterns": ["recommendation_request"], "expectedSlots": ["goal", "use_case"], "criticalSlots": [], "moduleIds": ["recommendation_by_scenario", "disclose_assumptions", "rank_options", "avoid_invented_data"], "incompatibleModuleIds": [], "bypassRuleIds": [], "confidence": {"base": 0.48, "perStrong": 0.2}
+  },
+  {
+    "id": "purchase_research", "description": {"ru": "Подбор и исследование товара", "en": "Product selection and purchase research"}, "priority": 13,
+    "triggers": {"ru": {"strong": ["подбери", "что купить", "для покупки"], "positive": ["до ", "рублей", "цена", "товар"], "weak": ["модель"], "negative": ["не покупать"], "requiredCombinations": [["купить", "до"]]}, "en": {"strong": ["find me", "what to buy", "buying guide"], "positive": ["under $", "price", "product"], "weak": ["model"], "negative": ["not buying"], "requiredCombinations": [["buy", "under"]]}},
+    "patterns": ["product_with_budget"], "expectedSlots": ["product", "budget", "use_case", "region"], "criticalSlots": ["topic"], "moduleIds": ["purchase_criteria", "compare_practical", "price_availability_current", "recommendation_by_scenario", "compare_total_cost"], "incompatibleModuleIds": [], "bypassRuleIds": [], "confidence": {"base": 0.5, "perStrong": 0.2}
+  },
+  {
+    "id": "decision_support", "description": {"ru": "Поддержка решения по критериям", "en": "Criteria-based decision support"}, "priority": 10,
+    "triggers": {"ru": {"strong": ["помоги решить", "что лучше выбрать", "прими решение"], "positive": ["критерии выбора", "компромисс"], "weak": ["варианты"], "negative": ["не выбирай"], "requiredCombinations": []}, "en": {"strong": ["help me decide", "which should i choose", "decision support"], "positive": ["selection criteria", "trade-off"], "weak": ["options"], "negative": ["do not choose"], "requiredCombinations": []}},
+    "patterns": ["decision_request"], "expectedSlots": ["options", "criteria"], "criticalSlots": [], "moduleIds": ["decision_matrix", "compare_tradeoffs", "disclose_assumptions", "recommendation_by_scenario"], "incompatibleModuleIds": [], "bypassRuleIds": [], "confidence": {"base": 0.45, "perStrong": 0.2}
+  },
+  {
+    "id": "troubleshooting", "description": {"ru": "Поиск причины бытовой или технической проблемы", "en": "Troubleshooting a practical or technical problem"}, "priority": 12,
+    "triggers": {"ru": {"strong": ["не работает", "почему сломалось", "вылетает", "зависает"], "positive": ["почини", "проблема", "сбой"], "weak": ["помоги"], "negative": ["работает нормально"], "requiredCombinations": []}, "en": {"strong": ["not working", "keeps crashing", "freezes", "broken"], "positive": ["fix", "problem", "failure"], "weak": ["help"], "negative": ["works fine"], "requiredCombinations": []}},
+    "patterns": ["symptom_report"], "expectedSlots": ["error_or_symptom", "expected_result", "environment"], "criticalSlots": ["error_or_symptom"], "moduleIds": ["diagnose_causes", "rank_causes", "safe_checks", "verify_fix", "diagnose_symptoms"], "incompatibleModuleIds": [], "bypassRuleIds": [], "confidence": {"base": 0.55, "perStrong": 0.18}
+  },
+  {
+    "id": "technical_diagnosis", "description": {"ru": "Глубокая диагностика технических симптомов", "en": "Technical diagnosis from observed symptoms"}, "priority": 14,
+    "triggers": {"ru": {"strong": ["диагностируй", "найди причину", "симптомы"], "positive": ["звук остаётся", "изображение", "лог"], "weak": ["причина"], "negative": ["без диагностики"], "requiredCombinations": [["причина", "провер"]]}, "en": {"strong": ["diagnose", "find the cause", "symptoms"], "positive": ["audio remains", "image", "log"], "weak": ["cause"], "negative": ["no diagnosis"], "requiredCombinations": [["cause", "check"]]}},
+    "patterns": ["technical_symptoms"], "expectedSlots": ["error_or_symptom", "actual_behavior", "expected_behavior"], "criticalSlots": ["error_or_symptom"], "moduleIds": ["diagnose_symptoms", "rank_causes", "safe_checks", "expected_vs_actual", "verify_fix"], "incompatibleModuleIds": [], "bypassRuleIds": [], "confidence": {"base": 0.5, "perStrong": 0.2}
+  },
+  {
+    "id": "programming_generation", "description": {"ru": "Создание программы или кода", "en": "Program or code generation"}, "priority": 14,
+    "triggers": {"ru": {"strong": ["напиши программу", "напиши код", "реализуй", "создай скрипт"], "positive": ["функция", "парсер", "компонент", "на python"], "weak": ["код"], "negative": ["не пиши код"], "requiredCombinations": [["напиши", "на"]]}, "en": {"strong": ["write a program", "write code", "implement", "create a script"], "positive": ["function", "parser", "component", "in python"], "weak": ["code"], "negative": ["do not write code"], "requiredCombinations": [["write", "in"]]}},
+    "patterns": ["implementation_request"], "expectedSlots": ["purpose", "platform", "programming_language", "input_data", "expected_result"], "criticalSlots": ["purpose", "expected_result"], "moduleIds": ["full_runnable_code", "no_pseudocode", "error_handling", "usage_example", "tests", "preserve_language_tech"], "incompatibleModuleIds": [], "bypassRuleIds": [], "confidence": {"base": 0.58, "perStrong": 0.18}
+  },
+  {
+    "id": "debugging", "description": {"ru": "Исправление ошибки в коде", "en": "Debugging and fixing code"}, "priority": 15,
+    "triggers": {"ru": {"strong": ["исправь ошибку", "отладь", "баг в коде"], "positive": ["stack trace", "исключение", "не компилируется"], "weak": ["ошибка"], "negative": ["не исправляй"], "requiredCombinations": [["код", "ошибка"]]}, "en": {"strong": ["fix the error", "debug", "bug in"], "positive": ["stack trace", "exception", "does not compile"], "weak": ["error"], "negative": ["do not fix"], "requiredCombinations": [["code", "error"]]}},
+    "patterns": ["code_error"], "expectedSlots": ["code", "error_or_symptom", "expected_result"], "criticalSlots": ["error_or_symptom"], "moduleIds": ["reproduction_steps", "minimal_fix", "verify_fix", "error_handling", "command_exact"], "incompatibleModuleIds": [], "bypassRuleIds": [], "confidence": {"base": 0.6, "perStrong": 0.18}
+  },
+  {
+    "id": "code_review", "description": {"ru": "Проверка качества кода", "en": "Code quality review"}, "priority": 13,
+    "triggers": {"ru": {"strong": ["проверь код", "код-ревью", "ревью кода"], "positive": ["найди проблемы", "уязвимости"], "weak": ["качество кода"], "negative": ["не проверяй"], "requiredCombinations": []}, "en": {"strong": ["review this code", "code review"], "positive": ["find issues", "vulnerabilities"], "weak": ["code quality"], "negative": ["do not review"], "requiredCombinations": []}},
+    "patterns": ["code_review"], "expectedSlots": ["code", "review_focus"], "criticalSlots": [], "moduleIds": ["code_review_findings", "severity_priority", "changed_files", "tests", "security_no_secrets"], "incompatibleModuleIds": [], "bypassRuleIds": [], "confidence": {"base": 0.55, "perStrong": 0.2}
+  },
+  {
+    "id": "refactoring", "description": {"ru": "Рефакторинг без изменения поведения", "en": "Behavior-preserving refactoring"}, "priority": 13,
+    "triggers": {"ru": {"strong": ["рефакторинг", "отрефактори", "улучши архитектуру"], "positive": ["упрости код", "декомпозируй"], "weak": ["чистый код"], "negative": ["не меняй код"], "requiredCombinations": []}, "en": {"strong": ["refactor", "improve the architecture"], "positive": ["simplify the code", "decompose"], "weak": ["clean code"], "negative": ["do not change code"], "requiredCombinations": []}},
+    "patterns": ["refactor_request"], "expectedSlots": ["code", "constraints"], "criticalSlots": [], "moduleIds": ["refactor_behavior", "incremental_refactor", "tests", "changed_files"], "incompatibleModuleIds": [], "bypassRuleIds": [], "confidence": {"base": 0.55, "perStrong": 0.2}
+  },
+  {
+    "id": "configuration", "description": {"ru": "Настройка программы или системы", "en": "Software or system configuration"}, "priority": 11,
+    "triggers": {"ru": {"strong": ["настрой", "конфигурация", "config"], "positive": ["параметр", "переменная окружения"], "weak": ["ini"], "negative": ["не настраивай"], "requiredCombinations": []}, "en": {"strong": ["configure", "configuration", "config"], "positive": ["setting", "environment variable"], "weak": ["ini"], "negative": ["do not configure"], "requiredCombinations": []}},
+    "patterns": ["configuration_request"], "expectedSlots": ["product", "desired_state", "environment"], "criticalSlots": [], "moduleIds": ["config_exact", "backup_before_config", "version_compatibility", "verify_fix", "file_paths_exact"], "incompatibleModuleIds": [], "bypassRuleIds": [], "confidence": {"base": 0.48, "perStrong": 0.2}
+  },
+  {
+    "id": "automation_workflow", "description": {"ru": "Автоматизация последовательности действий", "en": "Automation of a workflow"}, "priority": 11,
+    "triggers": {"ru": {"strong": ["автоматизируй", "автоматизация", "воркфлоу"], "positive": ["по расписанию", "сценарий", "пайплайн"], "weak": ["регулярно"], "negative": ["вручную"], "requiredCombinations": []}, "en": {"strong": ["automate", "automation", "workflow"], "positive": ["scheduled", "pipeline"], "weak": ["regularly"], "negative": ["manually"], "requiredCombinations": []}},
+    "patterns": ["automation_request"], "expectedSlots": ["trigger", "steps", "result", "platform"], "criticalSlots": [], "moduleIds": ["workflow_steps", "rollback_plan", "error_handling", "tests", "privacy_local"], "incompatibleModuleIds": [], "bypassRuleIds": [], "confidence": {"base": 0.5, "perStrong": 0.2}
+  },
+  {
+    "id": "data_analysis", "description": {"ru": "Анализ набора данных", "en": "Dataset analysis"}, "priority": 10,
+    "triggers": {"ru": {"strong": ["проанализируй данные", "анализ данных"], "positive": ["датасет", "статистика", "корреляция"], "weak": ["данные"], "negative": ["без анализа"], "requiredCombinations": []}, "en": {"strong": ["analyze the data", "data analysis"], "positive": ["dataset", "statistics", "correlation"], "weak": ["data"], "negative": ["no analysis"], "requiredCombinations": []}},
+    "patterns": ["data_analysis"], "expectedSlots": ["input_data", "question", "output_format"], "criticalSlots": ["input_data"], "moduleIds": ["data_validate", "formulas", "chart_recommend", "fact_vs_inference", "null_missing"], "incompatibleModuleIds": [], "bypassRuleIds": [], "confidence": {"base": 0.48, "perStrong": 0.2}
+  },
+  {
+    "id": "spreadsheet_task", "description": {"ru": "Задача в электронной таблице", "en": "Spreadsheet task"}, "priority": 12,
+    "triggers": {"ru": {"strong": ["в excel", "таблица excel", "электронная таблица"], "positive": ["формула", "ячейка", "лист"], "weak": ["таблица"], "negative": ["не excel"], "requiredCombinations": []}, "en": {"strong": ["in excel", "excel sheet", "spreadsheet"], "positive": ["formula", "cell", "worksheet"], "weak": ["table"], "negative": ["not excel"], "requiredCombinations": []}},
+    "patterns": ["spreadsheet_request"], "expectedSlots": ["goal", "input_data", "constraints"], "criticalSlots": [], "moduleIds": ["spreadsheet_formulas", "spreadsheet_no_macros", "workflow_steps", "data_validate", "usage_example"], "incompatibleModuleIds": [], "bypassRuleIds": [], "confidence": {"base": 0.55, "perStrong": 0.18}
+  },
+  {
+    "id": "document_analysis", "description": {"ru": "Анализ документа", "en": "Document analysis"}, "priority": 10,
+    "triggers": {"ru": {"strong": ["проанализируй документ", "разбери документ"], "positive": ["договор", "отчёт", "pdf"], "weak": ["документ"], "negative": ["не анализируй"], "requiredCombinations": []}, "en": {"strong": ["analyze the document", "review the document"], "positive": ["contract", "report", "pdf"], "weak": ["document"], "negative": ["do not analyze"], "requiredCombinations": []}},
+    "patterns": ["document_analysis"], "expectedSlots": ["document", "analysis_goal"], "criticalSlots": ["document"], "moduleIds": ["preserve_source_facts", "cite_source_sections", "document_structure", "fact_vs_inference", "avoid_invented_data"], "incompatibleModuleIds": [], "bypassRuleIds": [], "confidence": {"base": 0.5, "perStrong": 0.2}
+  },
+  {
+    "id": "summarization", "description": {"ru": "Краткое изложение текста", "en": "Text summarization"}, "priority": 10,
+    "triggers": {"ru": {"strong": ["сделай краткое содержание", "резюмируй", "кратко изложи"], "positive": ["саммари", "основные мысли"], "weak": ["кратко"], "negative": ["не сокращай"], "requiredCombinations": []}, "en": {"strong": ["summarize", "write a summary", "condense"], "positive": ["key points", "tl;dr"], "weak": ["briefly"], "negative": ["do not shorten"], "requiredCombinations": []}},
+    "patterns": ["summary_request"], "expectedSlots": ["source_text", "length"], "criticalSlots": ["source_text"], "moduleIds": ["summary_key_points", "summary_no_new_facts", "preserve_source_facts", "response_format"], "incompatibleModuleIds": [], "bypassRuleIds": [], "confidence": {"base": 0.55, "perStrong": 0.2}
+  },
+  {
+    "id": "information_extraction", "description": {"ru": "Извлечение конкретных данных", "en": "Extraction of specific information"}, "priority": 11,
+    "triggers": {"ru": {"strong": ["извлеки", "вытащи данные", "найди все"], "positive": ["поля", "сущности", "значения"], "weak": ["список"], "negative": ["не извлекай"], "requiredCombinations": []}, "en": {"strong": ["extract", "pull out", "find all"], "positive": ["fields", "entities", "values"], "weak": ["list"], "negative": ["do not extract"], "requiredCombinations": []}},
+    "patterns": ["extraction_request"], "expectedSlots": ["source_text", "fields", "output_format"], "criticalSlots": ["source_text"], "moduleIds": ["extract_schema", "null_missing", "preserve_source_facts", "valid_json_output"], "incompatibleModuleIds": [], "bypassRuleIds": [], "confidence": {"base": 0.52, "perStrong": 0.2}
+  },
+  {
+    "id": "rewriting", "description": {"ru": "Переписывание текста с сохранением смысла", "en": "Meaning-preserving rewrite"}, "priority": 11,
+    "triggers": {"ru": {"strong": ["перепиши", "переформулируй", "улучши текст"], "positive": ["стиль", "тон"], "weak": ["текст"], "negative": ["не меняй текст"], "requiredCombinations": []}, "en": {"strong": ["rewrite", "rephrase", "improve this text"], "positive": ["style", "tone"], "weak": ["text"], "negative": ["do not change the text"], "requiredCombinations": []}},
+    "patterns": ["rewrite_request"], "expectedSlots": ["source_text", "audience", "tone"], "criticalSlots": ["source_text"], "moduleIds": ["rewrite_preserve_meaning", "rewrite_tone", "avoid_invented_data", "response_format"], "incompatibleModuleIds": [], "bypassRuleIds": [], "confidence": {"base": 0.56, "perStrong": 0.2}
+  },
+  {
+    "id": "proofreading", "description": {"ru": "Исправление ошибок в тексте", "en": "Proofreading text"}, "priority": 12,
+    "triggers": {"ru": {"strong": ["исправь ошибки", "вычитай", "проверь орфографию"], "positive": ["опечатка", "пунктуация", "грамматика"], "weak": ["исправь слово"], "negative": ["не исправляй"], "requiredCombinations": []}, "en": {"strong": ["proofread", "fix the grammar", "correct errors"], "positive": ["typo", "punctuation", "spelling"], "weak": ["correct the word"], "negative": ["do not correct"], "requiredCombinations": []}},
+    "patterns": ["proofread_request"], "expectedSlots": ["source_text"], "criticalSlots": ["source_text"], "moduleIds": ["proofread_mark_changes", "proofread_preserve_quotes", "rewrite_preserve_meaning"], "incompatibleModuleIds": [], "bypassRuleIds": ["literal_proofread"], "confidence": {"base": 0.56, "perStrong": 0.2}
+  },
+  {
+    "id": "translation", "description": {"ru": "Перевод текста", "en": "Text translation"}, "priority": 13,
+    "triggers": {"ru": {"strong": ["переведи", "перевод на"], "positive": ["на русский", "на английский"], "weak": ["перевод"], "negative": ["не переводи"], "requiredCombinations": []}, "en": {"strong": ["translate", "translation into"], "positive": ["into russian", "into english"], "weak": ["translation"], "negative": ["do not translate"], "requiredCombinations": []}},
+    "patterns": ["translation_request"], "expectedSlots": ["source_text", "target_language"], "criticalSlots": ["source_text", "target_language"], "moduleIds": ["translate_preserve_terms", "translate_notes_ambiguity", "proofread_preserve_quotes"], "incompatibleModuleIds": [], "bypassRuleIds": ["short_translation"], "confidence": {"base": 0.62, "perStrong": 0.18}
+  },
+  {
+    "id": "research", "description": {"ru": "Исследование темы по источникам", "en": "Source-based topic research"}, "priority": 9,
+    "triggers": {"ru": {"strong": ["исследуй", "проведи исследование", "найди источники"], "positive": ["литература", "источники", "доказательства"], "weak": ["изучи"], "negative": ["без источников"], "requiredCombinations": []}, "en": {"strong": ["research", "conduct research", "find sources"], "positive": ["literature", "sources", "evidence"], "weak": ["investigate"], "negative": ["without sources"], "requiredCombinations": []}},
+    "patterns": ["research_request"], "expectedSlots": ["topic", "scope", "date_range"], "criticalSlots": ["topic"], "moduleIds": ["research_sources", "fact_vs_inference", "cite_dates", "disclose_assumptions"], "incompatibleModuleIds": [], "bypassRuleIds": [], "confidence": {"base": 0.46, "perStrong": 0.2}
+  },
+  {
+    "id": "current_information", "description": {"ru": "Проверка актуальной информации", "en": "Verification of current information"}, "priority": 14,
+    "triggers": {"ru": {"strong": ["сейчас", "актуальный", "на сегодня", "последние данные"], "positive": ["руководит", "текущий", "новости"], "weak": ["последний"], "negative": ["исторически"], "requiredCombinations": []}, "en": {"strong": ["currently", "up to date", "as of today", "latest data"], "positive": ["leads", "current", "news"], "weak": ["latest"], "negative": ["historically"], "requiredCombinations": []}},
+    "patterns": ["time_sensitive_question"], "expectedSlots": ["subject", "as_of_date"], "criticalSlots": ["subject"], "moduleIds": ["current_sources", "current_dates", "fact_vs_inference", "cite_dates", "avoid_invented_data"], "incompatibleModuleIds": [], "bypassRuleIds": [], "confidence": {"base": 0.56, "perStrong": 0.18}
+  },
+  {
+    "id": "planning", "description": {"ru": "Планирование проекта или действий", "en": "Project or action planning"}, "priority": 9,
+    "triggers": {"ru": {"strong": ["составь план", "спланируй", "дорожная карта"], "positive": ["этапы", "сроки", "план действий"], "weak": ["план"], "negative": ["без плана"], "requiredCombinations": []}, "en": {"strong": ["create a plan", "plan this", "roadmap"], "positive": ["phases", "timeline", "action plan"], "weak": ["plan"], "negative": ["no plan"], "requiredCombinations": []}},
+    "patterns": ["planning_request"], "expectedSlots": ["goal", "constraints", "deadline"], "criticalSlots": [], "moduleIds": ["plan_phases", "plan_dependencies", "acceptance_criteria", "disclose_assumptions"], "incompatibleModuleIds": [], "bypassRuleIds": [], "confidence": {"base": 0.5, "perStrong": 0.2}
+  },
+  {
+    "id": "how_to", "description": {"ru": "Практическая инструкция", "en": "Practical how-to instructions"}, "priority": 8,
+    "triggers": {"ru": {"strong": ["как сделать", "покажи как", "инструкция"], "positive": ["по шагам", "настроить"], "weak": ["как"], "negative": ["не объясняй как"], "requiredCombinations": []}, "en": {"strong": ["how to", "show me how", "instructions"], "positive": ["steps", "set up"], "weak": ["how"], "negative": ["do not explain how"], "requiredCombinations": []}},
+    "patterns": ["how_to_request"], "expectedSlots": ["goal", "environment"], "criticalSlots": [], "moduleIds": ["howto_prereq", "howto_ordered", "safe_checks", "verify_fix"], "incompatibleModuleIds": [], "bypassRuleIds": [], "confidence": {"base": 0.45, "perStrong": 0.2}
+  },
+  {
+    "id": "learning", "description": {"ru": "Обучение теме или навыку", "en": "Learning a topic or skill"}, "priority": 7,
+    "triggers": {"ru": {"strong": ["научи", "хочу изучить", "учебный план"], "positive": ["урок", "упражнения", "обучение"], "weak": ["понять"], "negative": ["не учи"], "requiredCombinations": []}, "en": {"strong": ["teach me", "want to learn", "study plan"], "positive": ["lesson", "exercises", "learning"], "weak": ["understand"], "negative": ["do not teach"], "requiredCombinations": []}},
+    "patterns": ["learning_request"], "expectedSlots": ["topic", "knowledge_level", "goal"], "criticalSlots": ["topic"], "moduleIds": ["learning_level_if_given", "learning_examples", "plan_phases", "acceptance_criteria"], "incompatibleModuleIds": [], "bypassRuleIds": [], "confidence": {"base": 0.45, "perStrong": 0.2}
+  },
+  {
+    "id": "problem_solving", "description": {"ru": "Решение задачи с проверяемым результатом", "en": "Solving a problem with a verifiable result"}, "priority": 7,
+    "triggers": {"ru": {"strong": ["реши задачу", "найди решение"], "positive": ["условие", "вычисли"], "weak": ["решить"], "negative": ["не решай"], "requiredCombinations": []}, "en": {"strong": ["solve the problem", "find a solution"], "positive": ["given", "calculate"], "weak": ["solve"], "negative": ["do not solve"], "requiredCombinations": []}},
+    "patterns": ["problem_statement"], "expectedSlots": ["goal", "input_data"], "criticalSlots": [], "moduleIds": ["direct_answer_first", "show_calculation", "verify_fix", "limitations"], "incompatibleModuleIds": [], "bypassRuleIds": ["simple_calculation"], "confidence": {"base": 0.42, "perStrong": 0.2}
+  },
+  {
+    "id": "brainstorming", "description": {"ru": "Генерация набора идей", "en": "Generation of distinct ideas"}, "priority": 7,
+    "triggers": {"ru": {"strong": ["придумай идеи", "мозговой штурм", "накидай вариантов"], "positive": ["варианты", "идеи"], "weak": ["придумай"], "negative": ["один вариант"], "requiredCombinations": []}, "en": {"strong": ["brainstorm", "generate ideas", "give me ideas"], "positive": ["options", "ideas"], "weak": ["come up with"], "negative": ["one option only"], "requiredCombinations": []}},
+    "patterns": ["brainstorm_request"], "expectedSlots": ["topic", "constraints"], "criticalSlots": ["topic"], "moduleIds": ["brainstorm_distinct", "brainstorm_constraints", "rank_options", "avoid_invented_data"], "incompatibleModuleIds": [], "bypassRuleIds": [], "confidence": {"base": 0.45, "perStrong": 0.2}
+  },
+  {
+    "id": "creative_writing", "description": {"ru": "Создание художественного текста", "en": "Creative writing"}, "priority": 8,
+    "triggers": {"ru": {"strong": ["напиши рассказ", "сочини", "стихотворение"], "positive": ["сюжет", "персонаж", "сцена"], "weak": ["творческий"], "negative": ["не художественный"], "requiredCombinations": []}, "en": {"strong": ["write a story", "compose", "poem"], "positive": ["plot", "character", "scene"], "weak": ["creative"], "negative": ["not fictional"], "requiredCombinations": []}},
+    "patterns": ["creative_request"], "expectedSlots": ["genre", "premise", "tone"], "criticalSlots": [], "moduleIds": ["creative_style_preserve", "creative_coherence", "brainstorm_constraints", "response_format"], "incompatibleModuleIds": [], "bypassRuleIds": [], "confidence": {"base": 0.48, "perStrong": 0.2}
+  },
+  {
+    "id": "image_generation_prompt", "description": {"ru": "Промт для генерации изображения", "en": "Prompt for image generation"}, "priority": 10,
+    "triggers": {"ru": {"strong": ["сгенерируй изображение", "промт для картинки", "нарисуй"], "positive": ["стиль изображения", "кадр", "освещение"], "weak": ["изображение"], "negative": ["без изображения"], "requiredCombinations": []}, "en": {"strong": ["generate an image", "image prompt", "draw"], "positive": ["visual style", "composition", "lighting"], "weak": ["image"], "negative": ["no image"], "requiredCombinations": []}},
+    "patterns": ["image_prompt"], "expectedSlots": ["subject", "style", "composition"], "criticalSlots": ["subject"], "moduleIds": ["image_visual_details", "image_negative_constraints", "avoid_invented_data", "response_format"], "incompatibleModuleIds": [], "bypassRuleIds": [], "confidence": {"base": 0.52, "perStrong": 0.2}
+  },
+  {
+    "id": "email_or_message", "description": {"ru": "Подготовка письма или сообщения", "en": "Drafting an email or message"}, "priority": 9,
+    "triggers": {"ru": {"strong": ["напиши письмо", "составь сообщение", "ответь клиенту"], "positive": ["тема письма", "получатель", "email"], "weak": ["сообщение"], "negative": ["не отправляй"], "requiredCombinations": []}, "en": {"strong": ["write an email", "draft a message", "reply to the client"], "positive": ["subject line", "recipient", "email"], "weak": ["message"], "negative": ["do not send"], "requiredCombinations": []}},
+    "patterns": ["message_request"], "expectedSlots": ["recipient", "purpose", "tone"], "criticalSlots": ["purpose"], "moduleIds": ["email_recipient_tone", "email_ready_text", "rewrite_preserve_meaning", "avoid_invented_data"], "incompatibleModuleIds": [], "bypassRuleIds": [], "confidence": {"base": 0.5, "perStrong": 0.2}
+  },
+  {
+    "id": "classification", "description": {"ru": "Распределение объектов по категориям", "en": "Classification into labels"}, "priority": 9,
+    "triggers": {"ru": {"strong": ["классифицируй", "распредели по категориям"], "positive": ["метки", "классы", "категории"], "weak": ["определи тип"], "negative": ["не классифицируй"], "requiredCombinations": []}, "en": {"strong": ["classify", "categorize"], "positive": ["labels", "classes", "categories"], "weak": ["identify the type"], "negative": ["do not classify"], "requiredCombinations": []}},
+    "patterns": ["classification_request"], "expectedSlots": ["input_data", "labels", "criteria"], "criticalSlots": ["input_data"], "moduleIds": ["classification_labels", "classification_uncertain", "structured_schema", "null_missing"], "incompatibleModuleIds": [], "bypassRuleIds": [], "confidence": {"base": 0.5, "perStrong": 0.2}
+  },
+  {
+    "id": "structured_output", "description": {"ru": "Ответ в заданной структуре", "en": "Response in a specified structure"}, "priority": 11,
+    "triggers": {"ru": {"strong": ["верни json", "в формате json", "структурированный ответ"], "positive": ["схема", "таблица", "поля"], "weak": ["формат"], "negative": ["обычным текстом"], "requiredCombinations": []}, "en": {"strong": ["return json", "as json", "structured output"], "positive": ["schema", "table", "fields"], "weak": ["format"], "negative": ["plain text"], "requiredCombinations": []}},
+    "patterns": ["output_format_request"], "expectedSlots": ["output_format", "fields"], "criticalSlots": ["output_format"], "moduleIds": ["valid_json_output", "structured_schema", "null_missing", "response_format"], "incompatibleModuleIds": [], "bypassRuleIds": [], "confidence": {"base": 0.54, "perStrong": 0.2}
+  },
+  {
+    "id": "file_transformation", "description": {"ru": "Преобразование файла или формата", "en": "File or format transformation"}, "priority": 11,
+    "triggers": {"ru": {"strong": ["преобразуй файл", "конвертируй", "переведи csv в", "конвертер файлов"], "positive": ["формат файла", "экспорт", "импорт"], "weak": ["файл"], "negative": ["не конвертируй"], "requiredCombinations": []}, "en": {"strong": ["convert the file", "transform the file", "convert csv to", "file converter"], "positive": ["file format", "export", "import"], "weak": ["file"], "negative": ["do not convert"], "requiredCombinations": []}},
+    "patterns": ["file_conversion"], "expectedSlots": ["source_format", "target_format", "input_data"], "criticalSlots": [], "moduleIds": ["transformation_preserve", "transformation_verify", "file_paths_exact", "data_validate", "backup_before_config"], "incompatibleModuleIds": [], "bypassRuleIds": [], "confidence": {"base": 0.52, "perStrong": 0.2}
+  },
+  {
+    "id": "legal_information", "description": {"ru": "Запрос общей правовой информации", "en": "General legal information request"}, "priority": 12,
+    "triggers": {"ru": {"strong": ["по закону", "юридический", "право ли"], "positive": ["договор", "суд", "норма закона"], "weak": ["право"], "negative": ["не юридический"], "requiredCombinations": []}, "en": {"strong": ["under the law", "legal", "is it lawful"], "positive": ["contract", "court", "statute"], "weak": ["law"], "negative": ["not legal"], "requiredCombinations": []}},
+    "patterns": ["legal_request"], "expectedSlots": ["topic", "jurisdiction", "as_of_date"], "criticalSlots": ["topic"], "moduleIds": ["legal_sources_jurisdiction", "current_sources", "current_dates", "fact_vs_inference", "limitations"], "incompatibleModuleIds": [], "bypassRuleIds": [], "confidence": {"base": 0.48, "perStrong": 0.2}
+  },
+  {
+    "id": "medical_information", "description": {"ru": "Запрос общей медицинской информации", "en": "General medical information request"}, "priority": 12,
+    "triggers": {"ru": {"strong": ["симптомы болезни", "медицинск", "диагноз"], "positive": ["симптом", "лечение", "лекарство", "врач"], "weak": ["здоровье"], "negative": ["не медицинский"], "requiredCombinations": []}, "en": {"strong": ["medical", "diagnosis", "symptoms of"], "positive": ["symptom", "treatment", "medicine", "doctor"], "weak": ["health"], "negative": ["not medical"], "requiredCombinations": []}},
+    "patterns": ["medical_request"], "expectedSlots": ["topic", "symptoms", "duration"], "criticalSlots": ["topic"], "moduleIds": ["medical_uncertainty", "current_sources", "safe_checks", "limitations", "avoid_invented_data"], "incompatibleModuleIds": [], "bypassRuleIds": [], "confidence": {"base": 0.48, "perStrong": 0.2}
+  },
+  {
+    "id": "financial_information", "description": {"ru": "Запрос финансовой информации", "en": "Financial information request"}, "priority": 12,
+    "triggers": {"ru": {"strong": ["инвестиции", "финансовый совет", "доходность"], "positive": ["акции", "кредит", "процентная ставка"], "weak": ["деньги"], "negative": ["не финансовый"], "requiredCombinations": []}, "en": {"strong": ["investment", "financial advice", "return on investment"], "positive": ["stocks", "loan", "interest rate"], "weak": ["money"], "negative": ["not financial"], "requiredCombinations": []}},
+    "patterns": ["financial_request"], "expectedSlots": ["topic", "region", "as_of_date"], "criticalSlots": ["topic"], "moduleIds": ["financial_risk", "current_sources", "current_dates", "fact_vs_inference", "limitations"], "incompatibleModuleIds": [], "bypassRuleIds": [], "confidence": {"base": 0.48, "perStrong": 0.2}
+  }
+]

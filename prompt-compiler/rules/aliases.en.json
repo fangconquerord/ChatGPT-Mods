@@ -1,0 +1,16 @@
+{
+  "languageMarkers": ["how", "what", "make", "write", "why", "need", "without", "for"],
+  "aliases": {
+    "comparison": ["compare", "what is the difference", "which is better", "find differences", "versus"],
+    "troubleshooting": ["why is it not working", "fix it", "keeps crashing", "broken", "glitching", "freezes"],
+    "how_to": ["how to", "how do i", "walk me through", "show me how"],
+    "explanation": ["explain clearly", "in simple terms", "break it down", "clarify"],
+    "completion": ["make it complete", "finish it", "working solution", "end to end"],
+    "concise": ["no fluff", "briefly", "to the point", "just the answer"],
+    "verification": ["check", "double-check", "validate", "verify"],
+    "recommendation": ["suggest", "recommend", "what should i get", "advise"],
+    "programming": ["code", "script", "app", "application", "function", "parser"],
+    "errors": ["error", "bug", "issue", "exception", "stack trace"],
+    "commonTypos": ["javscript", "pyhton", "excell", "configration", "refator"]
+  }
+}

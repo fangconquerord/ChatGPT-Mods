@@ -1,0 +1,22 @@
+[
+  {"id":"ru_arithmetic","input":"Сколько будет 2 + 2?","intent":"simple_question","action":"unchanged","contains":["2 + 2"],"excludes":["Требования к ответу"]},
+  {"id":"ru_short_translation","input":"Переведи hello на русский.","intent":"translation","action":"unchanged","contains":["hello","русский"],"excludes":["Требования к ответу"]},
+  {"id":"ru_http_definition","input":"Что означает HTTP 404?","intent":"definition","action":"unchanged","contains":["HTTP 404"],"excludes":["Требования к ответу"]},
+  {"id":"ru_literal_proofread","input":"Исправь слово «превет».","intent":"proofreading","action":"unchanged","contains":["«превет»"],"excludes":["Требования к ответу"]},
+  {"id":"ru_comparison","input":"Сравни V9 Pro и V9 Turbo+.","intent":"comparison","action":"rewritten","contains":["V9 Pro","V9 Turbo+","практические различия"],"excludes":["бюджет","мирового эксперта"]},
+  {"id":"ru_programming","input":"Напиши парсер JSON на Python.","intent":"programming_generation","action":"rewritten","contains":["JSON","Python","полный запускаемый пример"],"excludes":["Windows","macOS"]},
+  {"id":"ru_ambiguous_program","input":"Напиши программу.","intent":"programming_generation","action":"clarify_then_answer","contains":["Какое назначение программы","Какие входные данные"],"excludes":["Windows","Python"]},
+  {"id":"ru_diagnosis","input":"Игра зависает при Alt+Tab, звук остаётся, изображение не меняется.","intent":"technical_diagnosis","action":"rewritten","contains":["звук остаётся","изображение не меняется","Ранжируй причины","безопасные проверки"],"excludes":["видеокарта","Windows"]},
+  {"id":"ru_excel_constraint","input":"Сделай таблицу времени в Excel без макросов.","intent":"spreadsheet_task","action":"rewritten","contains":["Excel","без макросов","не предлагай VBA"],"excludes":[]},
+  {"id":"ru_command_path","input":"Исправь команду:\npython app.py --port 8080 --config D:\\work\\config.json","intent":"debugging","contains":["python app.py --port 8080 --config D:\\work\\config.json"],"excludes":[]},
+  {"id":"ru_budget","input":"Подбери беспроводные наушники до 10000 рублей.","intent":"purchase_research","action":"rewritten","contains":["10000 рублей","измеримые критерии"],"excludes":["доллар","игр"]},
+  {"id":"ru_current_missing_subject","input":"Кто сейчас руководит компанией?","intent":"current_information","action":"clarify_then_answer","contains":["О какой компании","Проверь актуальные сведения"],"excludes":[]},
+  {"id":"ru_negation_api","input":"Напиши локальный скрипт. Не используй API.","intent":"programming_generation","contains":["Не используй API"],"excludes":[]},
+  {"id":"ru_structured_spec","input":"Задача:\nДобавить локальный экспорт JSON.\n\nТребования:\n- без API\n- сохранить порядок\n- не менять имена полей\n\nФормат ответа:\nКод и тесты.","action":"unchanged","contains":["без API","не менять имена полей"],"excludes":[]},
+  {"id":"en_arithmetic","input":"What is 7 * 8?","intent":"definition","action":"unchanged","contains":["7 * 8"],"excludes":["Response requirements"]},
+  {"id":"en_comparison","input":"Compare Alpha 2 and Beta 3 for daily use.","intent":"comparison","action":"rewritten","contains":["Alpha 2","Beta 3","practical differences"],"excludes":["world-class expert"]},
+  {"id":"en_programming","input":"Write a JSON parser in Python.","intent":"programming_generation","action":"rewritten","contains":["JSON","Python","complete runnable example"],"excludes":["Windows","macOS"]},
+  {"id":"en_ambiguous_program","input":"Write a program.","intent":"programming_generation","action":"clarify_then_answer","contains":["What is the program for","What input and output"],"excludes":["Windows","Python"]},
+  {"id":"en_current","input":"Who currently leads the company?","intent":"current_information","action":"clarify_then_answer","contains":["Which company","Verify current information"],"excludes":[]},
+  {"id":"en_local_constraint","input":"Build a local file converter without API and do not delete data.","intent":"file_transformation","contains":["without API","do not delete data"],"excludes":["external data transfer"]}
+]

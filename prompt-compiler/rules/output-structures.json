@@ -1,0 +1,14 @@
+[
+  {"id":"output.direct","intents":["simple_question","definition"],"sections":["answer","brief_explanation"]},
+  {"id":"output.comparison","intents":["comparison","purchase_research"],"sections":["criteria","comparison","recommendation"]},
+  {"id":"output.diagnosis","intents":["troubleshooting","technical_diagnosis"],"sections":["likely_causes","safe_checks","next_action"]},
+  {"id":"output.code","intents":["programming_generation"],"sections":["implementation","usage","verification"]},
+  {"id":"output.review","intents":["code_review"],"sections":["findings","fixes","verification"]},
+  {"id":"output.analysis","intents":["data_analysis","document_analysis"],"sections":["findings","evidence","limitations"]},
+  {"id":"output.summary","intents":["summarization"],"sections":["key_points"]},
+  {"id":"output.plan","intents":["planning"],"sections":["phases","dependencies","acceptance"]},
+  {"id":"output.howto","intents":["how_to","spreadsheet_task"],"sections":["prerequisites","steps","check"]},
+  {"id":"output.research","intents":["research","current_information"],"sections":["answer","sources","date","uncertainty"]},
+  {"id":"output.message","intents":["email_or_message"],"sections":["subject","body"]},
+  {"id":"output.structured","intents":["structured_output","information_extraction","classification"],"sections":["schema_bound_result"]}
+]

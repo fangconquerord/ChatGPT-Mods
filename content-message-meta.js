@@ -1,17 +1,27 @@
-(() => {
+(async () => {
   "use strict";
 
   const BOOT_KEY = "__cgptQuickNavigationMessageMeta__";
+  const FEATURE_KEY = "fileInfo";
   const STYLE_ID = "cgpt-message-meta-style";
   const TIME_CLASS = "cgpt-inline-time";
   const TIME_ROW_CLASS = "cgpt-inline-time-row";
-  const INFO_BTN_CLASS = "cgpt-attach-info-btn";
-  const TOOLTIP_CLASS = "cgpt-attach-tooltip";
+  const COMPOSER_FILES_CLASS = "cgpt-composer-files";
+  const COMPOSER_FILES_GRID_CLASS = "cgpt-composer-files-grid";
   const COMPOSER_MARK_ATTR = "data-cgpt-composer-files";
+  const NATIVE_ATTACHMENT_TRAY_ATTR = "data-cgpt-native-attachment-tray";
+  const ATTACHMENT_LIMIT = 10;
   const TIMESTAMP_ATTR = "data-cgpt-ts-injected";
   const PASSIVE = { passive: true };
 
   if (window !== window.top) return;
+
+  if (
+    globalThis.CGPT_FEATURE_SETTINGS?.isEnabled &&
+    !(await globalThis.CGPT_FEATURE_SETTINGS.isEnabled(FEATURE_KEY))
+  ) {
+    return;
+  }
 
   if (globalThis[BOOT_KEY]?.scheduleRun) {
     globalThis[BOOT_KEY].scheduleRun();
@@ -19,6 +29,7 @@
   }
 
   const timeCache = new WeakMap();
+  const nativeRemoveControlCache = new WeakMap();
   let timer = 0;
   let conversationTimestampCache = {
     conversationId: null,
@@ -70,52 +81,277 @@
         justify-content: flex-start;
       }
 
-      .${INFO_BTN_CLASS} {
+      .${COMPOSER_FILES_CLASS} {
+        box-sizing: border-box;
+        width: 100%;
+        max-width: 100%;
+        margin: 0 0 8px;
+        color: inherit;
+        font-family: inherit;
+      }
+
+      .${COMPOSER_FILES_CLASS},
+      .${COMPOSER_FILES_CLASS} * {
+        box-sizing: border-box;
+      }
+
+      .cgpt-composer-files__header {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        min-width: 0;
+        margin: 0 2px 6px;
+      }
+
+      .cgpt-composer-files__count {
         display: inline-flex;
+        flex: 0 0 auto;
+        align-items: center;
+        min-height: 22px;
+        padding: 3px 7px;
+        border: 1px solid color-mix(in srgb, currentColor 16%, transparent);
+        border-radius: 999px;
+        background: color-mix(in srgb, currentColor 6%, transparent);
+        font-size: 11px;
+        font-weight: 650;
+        font-variant-numeric: tabular-nums;
+        line-height: 1;
+        letter-spacing: .01em;
+        white-space: nowrap;
+      }
+
+      .cgpt-composer-files__count.is-over-limit {
+        border-color: color-mix(in srgb, #ef4444 52%, transparent);
+        background: color-mix(in srgb, #ef4444 12%, transparent);
+        color: #dc2626;
+      }
+
+      .cgpt-composer-files__overflow {
+        display: flex;
+        flex: 1 1 auto;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 4px;
+        min-width: 0;
+        max-height: 48px;
+        overflow: auto;
+        padding: 1px 0;
+        scrollbar-width: thin;
+      }
+
+      .cgpt-composer-files__overflow-label {
+        flex: 0 0 auto;
+        color: color-mix(in srgb, #dc2626 78%, currentColor);
+        font-size: 11px;
+        font-weight: 600;
+        line-height: 20px;
+        white-space: nowrap;
+      }
+
+      .cgpt-composer-files__overflow-file {
+        display: inline-flex;
+        align-items: center;
+        min-width: 0;
+        max-width: min(220px, 100%);
+        border: 1px solid color-mix(in srgb, #ef4444 32%, transparent);
+        border-radius: 7px;
+        background: color-mix(in srgb, #ef4444 7%, transparent);
+        color: color-mix(in srgb, #dc2626 78%, currentColor);
+        font-size: 11px;
+        line-height: 20px;
+      }
+
+      .cgpt-composer-files__overflow-name {
+        min-width: 0;
+        overflow: hidden;
+        padding: 0 3px 0 6px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .${COMPOSER_FILES_GRID_CLASS} {
+        display: grid;
+        grid-template-columns: repeat(var(--cgpt-file-columns, ${ATTACHMENT_LIMIT}), minmax(0, 1fr));
+        gap: 6px;
+        width: 100%;
+        max-width: 100%;
+      }
+
+      .cgpt-composer-file {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        min-width: 0;
+        height: 54px;
+        padding: 7px;
+        border: 1px solid color-mix(in srgb, currentColor 15%, transparent);
+        border-radius: 12px;
+        background: color-mix(in srgb, currentColor 4%, transparent);
+        box-shadow: 0 1px 0 color-mix(in srgb, currentColor 4%, transparent);
+        transition: border-color .16s ease, background .16s ease;
+      }
+
+      .cgpt-composer-file:hover,
+      .cgpt-composer-file:focus-within {
+        border-color: color-mix(in srgb, currentColor 28%, transparent);
+        background: color-mix(in srgb, currentColor 7%, transparent);
+      }
+
+      .cgpt-composer-file__icon {
+        display: inline-flex;
+        flex: 0 0 auto;
+        align-items: center;
+        justify-content: center;
+        width: 25px;
+        height: 30px;
+        border: 1px solid currentColor;
+        border-radius: 7px 7px 9px 9px;
+        color: color-mix(in srgb, currentColor 72%, #2563eb);
+        font-size: 8px;
+        font-weight: 750;
+        letter-spacing: .02em;
+        line-height: 1;
+      }
+
+      .cgpt-composer-file__icon.is-pdf { color: #dc2626; }
+      .cgpt-composer-file__icon.is-image { color: #a855f7; }
+      .cgpt-composer-file__icon.is-spreadsheet { color: #16a34a; }
+      .cgpt-composer-file__icon.is-code { color: #0891b2; }
+      .cgpt-composer-file__icon.is-archive { color: #d97706; }
+      .cgpt-composer-file__icon.is-media { color: #db2777; }
+      .cgpt-composer-file__icon.is-model { color: #ea580c; }
+
+      .cgpt-composer-file__body {
+        display: grid;
+        min-width: 0;
+        flex: 1 1 auto;
+        gap: 3px;
+      }
+
+      .cgpt-composer-file__name-viewport {
+        min-width: 0;
+        overflow: hidden;
+        white-space: nowrap;
+      }
+
+      .cgpt-composer-file__name-track {
+        display: inline-flex;
+        min-width: 100%;
+        vertical-align: top;
+      }
+
+      .cgpt-composer-file__name-copy {
+        flex: 0 0 auto;
+        overflow: hidden;
+        font-size: 11px;
+        font-weight: 620;
+        line-height: 14px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .cgpt-composer-file__name-track.is-overflowing {
+        min-width: max-content;
+        animation: cgpt-composer-file-marquee var(--cgpt-marquee-duration, 8s) linear infinite;
+      }
+
+      .cgpt-composer-file__name-track.is-overflowing .cgpt-composer-file__name-copy {
+        overflow: visible;
+        text-overflow: clip;
+      }
+
+      .cgpt-composer-file__type {
+        overflow: hidden;
+        color: color-mix(in srgb, currentColor 58%, transparent);
+        font-size: 9px;
+        font-weight: 650;
+        letter-spacing: .045em;
+        line-height: 12px;
+        text-overflow: ellipsis;
+        text-transform: uppercase;
+        white-space: nowrap;
+      }
+
+      .cgpt-composer-file__remove {
+        display: inline-flex;
+        flex: 0 0 auto;
         align-items: center;
         justify-content: center;
         width: 18px;
         height: 18px;
-        min-width: 18px;
-        border-radius: 999px;
-        border: 1px solid color-mix(in srgb, currentColor 22%, transparent);
-        background: transparent;
-        color: inherit;
-        font: inherit;
-        font-size: 12px;
-        line-height: 1;
-        cursor: help;
+        margin: -2px -2px auto 0;
         padding: 0;
-        opacity: .82;
-        margin-right: 8px;
+        border: 0;
+        border-radius: 6px;
+        background: transparent;
+        color: color-mix(in srgb, currentColor 62%, transparent);
+        cursor: pointer;
+        font: inherit;
+        font-size: 15px;
+        line-height: 1;
+        opacity: .72;
+        transition: background .16s ease, color .16s ease, opacity .16s ease;
       }
 
-      .${INFO_BTN_CLASS}:hover {
+      .cgpt-composer-file:hover .cgpt-composer-file__remove,
+      .cgpt-composer-file:focus-within .cgpt-composer-file__remove,
+      .cgpt-composer-files__overflow-file:hover .cgpt-composer-file__remove,
+      .cgpt-composer-file__remove:focus-visible {
         opacity: 1;
-        background: color-mix(in srgb, currentColor 10%, transparent);
       }
 
-      .${TOOLTIP_CLASS} {
-        position: fixed;
-        z-index: 2147483646;
-        max-width: min(420px, calc(100vw - 24px));
-        padding: 10px 12px;
-        border-radius: 12px;
-        background: rgba(19, 19, 22, 0.96);
-        color: rgba(255,255,255,0.96);
-        box-shadow: 0 14px 30px rgba(0,0,0,.28);
-        font-size: 12px;
-        line-height: 1.45;
-        white-space: pre-wrap;
-        pointer-events: none;
-        opacity: 0;
-        transform: translateY(4px);
-        transition: opacity .12s ease, transform .12s ease;
+      .cgpt-composer-file__remove:hover,
+      .cgpt-composer-file__remove:focus-visible {
+        background: color-mix(in srgb, #ef4444 14%, transparent);
+        color: #dc2626;
+        outline: none;
       }
 
-      .${TOOLTIP_CLASS}.is-on {
-        opacity: 1;
-        transform: translateY(0);
+      .cgpt-composer-files__overflow-file .cgpt-composer-file__remove {
+        width: 18px;
+        height: 20px;
+        margin: 0 1px 0 0;
+        border-radius: 5px;
+        font-size: 14px;
+      }
+
+      [${NATIVE_ATTACHMENT_TRAY_ATTR}="1"] {
+        display: none !important;
+      }
+
+      @keyframes cgpt-composer-file-marquee {
+        0%, 8% { transform: translateX(0); }
+        40%, 55% { transform: translateX(var(--cgpt-marquee-offset, -50%)); }
+        90%, 100% { transform: translateX(0); }
+      }
+
+      @media (max-width: 700px) {
+        .${COMPOSER_FILES_GRID_CLASS} {
+          grid-template-columns: repeat(var(--cgpt-mobile-file-columns, 5), minmax(0, 1fr));
+        }
+
+        .cgpt-composer-file {
+          height: 46px;
+          gap: 4px;
+          padding: 5px;
+          border-radius: 10px;
+        }
+
+        .cgpt-composer-file__icon {
+          width: 20px;
+          height: 24px;
+          border-radius: 6px 6px 7px 7px;
+          font-size: 7px;
+        }
+
+        .cgpt-composer-file__name-copy { font-size: 10px; }
+        .cgpt-composer-file__type { font-size: 8px; }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .cgpt-composer-file__name-track.is-overflowing {
+          animation: none;
+        }
       }
     `;
 
@@ -584,54 +820,21 @@
     });
   }
 
-  function getTooltip() {
-    let tooltip = document.querySelector(`.${TOOLTIP_CLASS}`);
-    if (tooltip) return tooltip;
-
-    tooltip = document.createElement("div");
-    tooltip.className = TOOLTIP_CLASS;
-    document.body.appendChild(tooltip);
-    return tooltip;
-  }
-
-  function showTooltip(anchor, text) {
-    const tooltip = getTooltip();
-    tooltip.textContent = text;
-    tooltip.classList.add("is-on");
-
-    const anchorRect = anchor.getBoundingClientRect();
-    const tipRect = tooltip.getBoundingClientRect();
-    let left = anchorRect.left;
-    let top = anchorRect.bottom + 8;
-
-    if (left + tipRect.width > window.innerWidth - 12) {
-      left = window.innerWidth - tipRect.width - 12;
-    }
-    if (left < 12) left = 12;
-    if (top + tipRect.height > window.innerHeight - 12) {
-      top = anchorRect.top - tipRect.height - 8;
-    }
-    if (top < 12) top = 12;
-
-    tooltip.style.left = `${Math.round(left)}px`;
-    tooltip.style.top = `${Math.round(top)}px`;
-  }
-
-  function hideTooltip() {
-    const tooltip = document.querySelector(`.${TOOLTIP_CLASS}`);
-    if (tooltip) tooltip.classList.remove("is-on");
-  }
-
   function isVisibleElement(el) {
     if (!el?.isConnected) return false;
+    const isManagedNativeAttachment = Boolean(
+      el.closest?.(`[${NATIVE_ATTACHMENT_TRAY_ATTR}="1"]`),
+    );
     const styles = window.getComputedStyle(el);
-    if (styles.display === "none" || styles.visibility === "hidden") return false;
+    if (styles.display === "none" || styles.visibility === "hidden") {
+      return isManagedNativeAttachment;
+    }
     const rect = el.getBoundingClientRect();
-    return rect.width > 0 && rect.height > 0;
+    return (rect.width > 0 && rect.height > 0) || isManagedNativeAttachment;
   }
 
   function isDeleteLikeText(text) {
-    return /\b(delete|remove|удалить)\b/iu.test(normalizeText(text));
+    return /\b(delete|remove|\u0443\u0434\u0430\u043b\u0438\u0442\u044c)\b/iu.test(normalizeText(text));
   }
 
   function extractFileNameFromText(text) {
@@ -701,7 +904,7 @@
       }
     }
 
-    for (const source of [directText, title, ariaLabel]) {
+    for (const source of [directText, title, ariaLabel, normalizeText(el.textContent || "")]) {
       if (!source) continue;
       const name = extractFileNameFromText(source);
       if (name) return name;
@@ -710,13 +913,103 @@
     return null;
   }
 
+  function getInteractiveControls(scope) {
+    return [
+      ...(scope.matches?.("button, [role='button']") ? [scope] : []),
+      ...Array.from(scope.querySelectorAll?.("button, [role='button']") || []),
+    ];
+  }
+
+  function isNativeRemoveControl(control) {
+    const label = [
+      control.getAttribute("aria-label"),
+      control.getAttribute("title"),
+      control.getAttribute("data-testid"),
+      control.textContent,
+    ].join(" ");
+    const hasExplicitRemoveIntent =
+      isDeleteLikeText(label) ||
+      /\b(close|clear)\b|\u0437\u0430\u043a\u0440\u044b\u0442\u044c|\u043e\u0447\u0438\u0441\u0442\u0438\u0442\u044c/iu.test(label) ||
+      control.matches?.("[data-testid*='remove' i], [data-testid*='delete' i], [data-testid*='close' i]");
+    if (hasExplicitRemoveIntent) return true;
+
+    if (
+      control.closest("a, [download]") ||
+      control.matches?.("[download], [data-testid*='download' i]")
+    ) {
+      return false;
+    }
+
+    const controlText = normalizeText(control.textContent || "");
+    const rect = control.getBoundingClientRect?.();
+    const compactIcon =
+      rect &&
+      rect.width > 0 &&
+      rect.height > 0 &&
+      rect.width <= 44 &&
+      rect.height <= 44 &&
+      controlText.length <= 2 &&
+      (Boolean(control.querySelector("svg")) || /^(?:×|✕|✖|x)$/iu.test(controlText));
+    return compactIcon;
+  }
+
+  function findNativeRemoveControl(source, form) {
+    const cachedControl = nativeRemoveControlCache.get(source);
+    if (cachedControl?.isConnected) return cachedControl;
+
+    let scope = source;
+
+    for (let depth = 0; scope && scope !== form && depth < 7; depth += 1) {
+      const controls = getInteractiveControls(scope);
+      const removeControls = controls.filter(isNativeRemoveControl);
+      if (removeControls.length === 1) {
+        nativeRemoveControlCache.set(source, removeControls[0]);
+        return removeControls[0];
+      }
+      scope = scope.parentElement;
+    }
+
+    return null;
+  }
+
+  function findCommonAncestor(elements, boundary) {
+    if (!elements.length) return null;
+    let current = elements[0];
+
+    while (current && current !== boundary) {
+      if (elements.every((element) => current.contains(element))) return current;
+      current = current.parentElement;
+    }
+
+    return null;
+  }
+
+  function findNativeAttachmentTray(form, sources) {
+    const composer = resolveComposerElement();
+    const tray = findCommonAncestor(sources, form);
+    return tray && tray !== sources[0] && !tray.contains(composer) ? tray : null;
+  }
+
+  function findNativeAttachmentCard(form, item) {
+    const composer = resolveComposerElement();
+    let card = findCommonAncestor([item.source, item.removeControl], form);
+
+    while (card && card !== form) {
+      const removeControls = getInteractiveControls(card).filter(isNativeRemoveControl);
+      if (removeControls.length === 1 && !card.contains(composer)) {
+        return card;
+      }
+      card = card.parentElement;
+    }
+
+    return null;
+  }
+
   function collectComposerAttachmentData() {
     const form = locateComposerForm();
-    if (!form) return { form: null, names: [], anchor: null };
+    if (!form) return { form: null, items: [] };
 
-    const names = [];
-    const seen = new Set();
-    let anchor = null;
+    const itemsByName = new Map();
     const fileExtPattern = /\.[a-zA-Z0-9]{1,6}(\s|$)/;
     const candidates = new Set();
 
@@ -742,42 +1035,262 @@
 
     candidates.forEach((el) => {
       const name = extractSingleAttachmentName(el);
-      if (!name || seen.has(name)) return;
-      seen.add(name);
-      names.push(name);
-      if (!anchor) anchor = el.closest("button, a") || el;
+      if (!name) return;
+      const sourceText = normalizeText([
+        el.getAttribute?.("aria-label"),
+        el.getAttribute?.("title"),
+        el.textContent,
+      ].filter(Boolean).join(" "));
+      const candidate = {
+        name,
+        source: el,
+        removeControl: findNativeRemoveControl(el, form),
+        sourceTextLength: sourceText.length,
+      };
+      const current = itemsByName.get(name);
+      if (!current || candidate.sourceTextLength < current.sourceTextLength) {
+        itemsByName.set(name, candidate);
+      }
     });
 
-    return { form, names, anchor };
+    return {
+      form,
+      items: Array.from(itemsByName.values()).map(({ sourceTextLength, ...item }) => item),
+    };
   }
 
-  function updateComposerAttachmentInfo() {
-    const { form, names, anchor } = collectComposerAttachmentData();
-    if (!form) return;
+  function describeFile(name) {
+    const extension = (name.match(/\.([^.]+)$/u)?.[1] || "file").toLowerCase();
+    const kinds = {
+      pdf: ["pdf"],
+      image: ["jpg", "jpeg", "png", "gif", "webp", "svg", "heic", "avif", "bmp"],
+      spreadsheet: ["xls", "xlsx", "csv", "tsv", "ods"],
+      code: ["js", "mjs", "cjs", "ts", "tsx", "jsx", "py", "java", "c", "cpp", "cs", "go", "rs", "php", "rb", "html", "css", "json", "xml", "yaml", "yml", "sql", "sh"],
+      archive: ["zip", "rar", "7z", "tar", "gz"],
+      media: ["mp3", "wav", "m4a", "ogg", "mp4", "mov", "avi", "mkv", "webm"],
+      model: ["fbx", "obj", "blend", "stl", "glb", "gltf"],
+    };
+    const kind = Object.entries(kinds).find(([, extensions]) => extensions.includes(extension))?.[0] || "document";
+    const badge = extension.length <= 4 ? extension.toUpperCase() : kind === "spreadsheet" ? "XLS" : "FILE";
+    return { badge, kind, type: extension.toUpperCase() };
+  }
 
-    let host = form.querySelector(`[${COMPOSER_MARK_ATTR}="1"]`);
+  function removeAttachment(item) {
+    const form = locateComposerForm();
+    const currentItem = form
+      ? collectComposerAttachmentData().items.find(({ name }) => name === item.name)
+      : null;
+    const source = currentItem?.source || item.source;
+    const removeControl =
+      (form && source?.isConnected && findNativeRemoveControl(source, form)) ||
+      (item.removeControl?.isConnected && isNativeRemoveControl(item.removeControl)
+        ? item.removeControl
+        : null);
 
-    if (names.length < 2 || !anchor) {
-      if (host) host.remove();
+    if (!removeControl) return;
+    removeControl.click();
+    window.setTimeout(scheduleRun, 0);
+  }
+
+  function createRemoveButton(item) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "cgpt-composer-file__remove";
+    button.textContent = "×";
+    button.title = `Удалить ${item.name}`;
+    button.setAttribute("aria-label", `Удалить ${item.name}`);
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      removeAttachment(item);
+    });
+    return button;
+  }
+
+  function createFileCard(item) {
+    const descriptor = describeFile(item.name);
+    const card = document.createElement("div");
+    card.className = "cgpt-composer-file";
+    card.setAttribute("role", "listitem");
+    card.title = `${item.name} · ${descriptor.type}`;
+
+    const icon = document.createElement("span");
+    icon.className = `cgpt-composer-file__icon is-${descriptor.kind}`;
+    icon.textContent = descriptor.badge;
+    icon.setAttribute("aria-hidden", "true");
+
+    const body = document.createElement("div");
+    body.className = "cgpt-composer-file__body";
+
+    const viewport = document.createElement("div");
+    viewport.className = "cgpt-composer-file__name-viewport";
+    const track = document.createElement("span");
+    track.className = "cgpt-composer-file__name-track";
+    const firstName = document.createElement("span");
+    firstName.className = "cgpt-composer-file__name-copy";
+    firstName.textContent = item.name;
+    track.appendChild(firstName);
+    viewport.appendChild(track);
+
+    const type = document.createElement("span");
+    type.className = "cgpt-composer-file__type";
+    type.textContent = descriptor.type;
+    body.append(viewport, type);
+    card.append(icon, body);
+
+    const removeButton = createRemoveButton(item);
+    if (removeButton) card.appendChild(removeButton);
+    return card;
+  }
+
+  function createOverflowFile(item) {
+    const row = document.createElement("div");
+    row.className = "cgpt-composer-files__overflow-file";
+    row.title = item.name;
+    const name = document.createElement("span");
+    name.className = "cgpt-composer-files__overflow-name";
+    name.textContent = item.name;
+    row.appendChild(name);
+    const removeButton = createRemoveButton(item);
+    if (removeButton) row.appendChild(removeButton);
+    return row;
+  }
+
+  function enableOverflowMarquees(host) {
+    window.requestAnimationFrame(() => {
+      if (!host.isConnected) return;
+      host.querySelectorAll(".cgpt-composer-file__name-track").forEach((track) => {
+        const viewport = track.parentElement;
+        const name = track.firstElementChild;
+        if (!viewport || !name) return;
+        const nameWidth = Math.ceil(name.scrollWidth);
+        const travelDistance = Math.ceil(nameWidth - viewport.clientWidth);
+        const isOverflowing = travelDistance > 2;
+        if (!isOverflowing) {
+          track.classList.remove("is-overflowing");
+          track.style.removeProperty("--cgpt-marquee-offset");
+          track.style.removeProperty("--cgpt-marquee-duration");
+          return;
+        }
+
+        track.style.setProperty("--cgpt-marquee-offset", `-${travelDistance}px`);
+        track.style.setProperty(
+          "--cgpt-marquee-duration",
+          `${Math.max(8, travelDistance / 8).toFixed(2)}s`,
+        );
+        track.classList.add("is-overflowing");
+      });
+    });
+  }
+
+  function restoreNativeAttachmentTrays(form) {
+    form.querySelectorAll(`[${NATIVE_ATTACHMENT_TRAY_ATTR}="1"]`).forEach((tray) => {
+      tray.removeAttribute(NATIVE_ATTACHMENT_TRAY_ATTR);
+    });
+  }
+
+  function hideNativeAttachmentTray(form, items) {
+    if (!items.length || items.some((item) => !item.removeControl)) {
+      restoreNativeAttachmentTrays(form);
       return;
     }
 
-    if (!host) {
-      host = document.createElement("button");
-      host.type = "button";
-      host.className = INFO_BTN_CLASS;
-      host.setAttribute(COMPOSER_MARK_ATTR, "1");
-      host.textContent = "i";
-      host.title = "";
-      host.setAttribute("aria-label", "");
-      (anchor.parentElement || form).insertBefore(host, anchor);
-      host.addEventListener("mouseleave", hideTooltip);
-      host.addEventListener("blur", hideTooltip);
+    const tray = findNativeAttachmentTray(form, items.map((item) => item.source));
+    if (tray) {
+      if (tray.getAttribute(NATIVE_ATTACHMENT_TRAY_ATTR) !== "1") {
+        tray.setAttribute(NATIVE_ATTACHMENT_TRAY_ATTR, "1");
+      }
+      return;
     }
 
-    const tooltipText = names.map((name, index) => `${index + 1}. ${name}`).join("\n");
-    host.onmouseenter = () => showTooltip(host, tooltipText);
-    host.onfocus = () => showTooltip(host, tooltipText);
+    const cards = items.map((item) => findNativeAttachmentCard(form, item));
+    if (cards.some((card) => !card)) return;
+    cards.forEach((card) => {
+      if (card.getAttribute(NATIVE_ATTACHMENT_TRAY_ATTR) !== "1") {
+        card.setAttribute(NATIVE_ATTACHMENT_TRAY_ATTR, "1");
+      }
+    });
+  }
+
+  function getComposerFilesHost(form) {
+    let host = document.querySelector(`[${COMPOSER_MARK_ATTR}="1"]`);
+    if (!host) {
+      host = document.createElement("section");
+      host.setAttribute(COMPOSER_MARK_ATTR, "1");
+      host.setAttribute("aria-label", "Прикреплённые файлы");
+    }
+    if (host.nextElementSibling !== form) form.before(host);
+    host.className = COMPOSER_FILES_CLASS;
+    return host;
+  }
+
+  function hasSameAttachmentItems(previousItems, nextItems) {
+    return Boolean(
+      previousItems &&
+      previousItems.length === nextItems.length &&
+      previousItems.every(
+        (item, index) => item.name === nextItems[index].name,
+      ),
+    );
+  }
+
+  function updateComposerAttachmentInfo() {
+    const { form, items } = collectComposerAttachmentData();
+    if (!form) return;
+
+    if (!items.length) {
+      restoreNativeAttachmentTrays(form);
+      document.querySelector(`[${COMPOSER_MARK_ATTR}="1"]`)?.remove();
+      return;
+    }
+
+    const host = getComposerFilesHost(form);
+    if (hasSameAttachmentItems(host._cgptAttachmentItems, items)) {
+      host._cgptAttachmentItems = items;
+      hideNativeAttachmentTray(form, items);
+      enableOverflowMarquees(host);
+      return;
+    }
+
+    const visibleItems = items.slice(0, ATTACHMENT_LIMIT);
+    const overLimitItems = items.slice(ATTACHMENT_LIMIT);
+    const header = document.createElement("div");
+    header.className = "cgpt-composer-files__header";
+    const count = document.createElement("span");
+    count.className = "cgpt-composer-files__count";
+    count.textContent = `${items.length}/${ATTACHMENT_LIMIT}`;
+    count.setAttribute("aria-live", "polite");
+    if (overLimitItems.length) count.classList.add("is-over-limit");
+    header.appendChild(count);
+
+    if (overLimitItems.length) {
+      const overflow = document.createElement("div");
+      overflow.className = "cgpt-composer-files__overflow";
+      overflow.setAttribute("aria-label", "Файлы сверх лимита");
+      const label = document.createElement("span");
+      label.className = "cgpt-composer-files__overflow-label";
+      label.textContent = "Сверх лимита:";
+      overflow.appendChild(label);
+      overLimitItems.forEach((item) => overflow.appendChild(createOverflowFile(item)));
+      header.appendChild(overflow);
+    }
+
+    const grid = document.createElement("div");
+    grid.className = COMPOSER_FILES_GRID_CLASS;
+    grid.setAttribute("role", "list");
+    grid.style.setProperty(
+      "--cgpt-file-columns",
+      String(Math.max(1, Math.min(5, visibleItems.length))),
+    );
+    grid.style.setProperty(
+      "--cgpt-mobile-file-columns",
+      String(Math.max(1, Math.min(5, visibleItems.length))),
+    );
+    visibleItems.forEach((item) => grid.appendChild(createFileCard(item)));
+    host.replaceChildren(header, ...(visibleItems.length ? [grid] : []));
+    host._cgptAttachmentItems = items;
+    hideNativeAttachmentTray(form, items);
+    enableOverflowMarquees(host);
   }
 
   function run() {
@@ -809,8 +1322,7 @@
 
   window.addEventListener("pageshow", scheduleRun, PASSIVE);
   window.addEventListener("popstate", scheduleRun, PASSIVE);
-  window.addEventListener("resize", hideTooltip, PASSIVE);
-  window.addEventListener("scroll", hideTooltip, PASSIVE);
+  window.addEventListener("resize", scheduleRun, PASSIVE);
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", start, { once: true });

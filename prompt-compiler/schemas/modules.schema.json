@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gpt-mods.local/schemas/modules.schema.json",
+  "type": "array",
+  "minItems": 80,
+  "items": {
+    "type": "object",
+    "required": ["id", "text", "intents", "forbiddenIntents", "activateWhenAny", "deactivateWhenAny", "weight", "lengthCost", "conflicts", "dependsOn", "dedupeKey"],
+    "properties": {
+      "id": {"$ref": "common.schema.json#/$defs/stableId"},
+      "text": {"$ref": "common.schema.json#/$defs/localizedText"},
+      "intents": {"$ref": "common.schema.json#/$defs/stringList"},
+      "forbiddenIntents": {"$ref": "common.schema.json#/$defs/stringList"},
+      "activateWhenAny": {"$ref": "common.schema.json#/$defs/stringList"},
+      "deactivateWhenAny": {"$ref": "common.schema.json#/$defs/stringList"},
+      "weight": {"type": "number", "minimum": 0, "maximum": 10},
+      "lengthCost": {"type": "number", "minimum": 0, "maximum": 10},
+      "conflicts": {"$ref": "common.schema.json#/$defs/stringList"},
+      "dependsOn": {"$ref": "common.schema.json#/$defs/stringList"},
+      "dedupeKey": {"type": "string", "minLength": 1}
+    },
+    "additionalProperties": false
+  }
+}

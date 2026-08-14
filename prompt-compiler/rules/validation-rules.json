@@ -1,0 +1,14 @@
+[
+  {"id":"validation.preserved_tokens","kind":"required","weight":100,"range":[1,1]},
+  {"id":"validation.preserved_constraints","kind":"required","weight":80,"range":[1,1]},
+  {"id":"validation.preserved_negations","kind":"required","weight":90,"range":[1,1]},
+  {"id":"validation.no_banned_fluff","kind":"required","weight":50,"range":[0,0]},
+  {"id":"validation.no_unknown_tokens","kind":"required","weight":100,"range":[0,0]},
+  {"id":"validation.dynamic_growth","kind":"penalty","weight":25,"range":[1,12]},
+  {"id":"validation.no_duplicate_paragraphs","kind":"penalty","weight":20,"range":[0,0]},
+  {"id":"validation.no_new_critical_numbers","kind":"penalty","weight":80,"range":[0,0]},
+  {"id":"validation.no_new_products","kind":"penalty","weight":80,"range":[0,0]},
+  {"id":"validation.language_stable","kind":"required","weight":40,"range":[1,1]},
+  {"id":"validation.changed_consistency","kind":"required","weight":30,"range":[1,1]},
+  {"id":"validation.question_limit","kind":"required","weight":40,"range":[0,3]}
+]

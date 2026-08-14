@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gpt-mods.local/schemas/slot-schemas.schema.json",
+  "type": "array",
+  "minItems": 36,
+  "items": {
+    "type": "object",
+    "required": ["intentId", "critical", "useful", "optional"],
+    "properties": {
+      "intentId": {"$ref": "common.schema.json#/$defs/stableId"},
+      "critical": {"$ref": "common.schema.json#/$defs/stringList"},
+      "useful": {"$ref": "common.schema.json#/$defs/stringList"},
+      "optional": {"$ref": "common.schema.json#/$defs/stringList"}
+    },
+    "additionalProperties": false
+  }
+}

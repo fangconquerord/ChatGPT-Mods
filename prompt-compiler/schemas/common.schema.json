@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gpt-mods.local/schemas/common.schema.json",
+  "$defs": {
+    "stableId": {"type": "string", "pattern": "^[a-z][a-z0-9_.-]+$"},
+    "localizedText": {
+      "type": "object",
+      "required": ["ru", "en"],
+      "properties": {"ru": {"type": "string", "minLength": 1}, "en": {"type": "string", "minLength": 1}},
+      "additionalProperties": false
+    },
+    "stringList": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true}
+  }
+}

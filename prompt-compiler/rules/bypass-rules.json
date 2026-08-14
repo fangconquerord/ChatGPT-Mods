@@ -1,0 +1,11 @@
+[
+  {"id":"short_question","description":"Short unambiguous question","maxLength":120,"containsAny":["сколько ","кто такой ","what is ","who is "]},
+  {"id":"short_translation","description":"Short literal translation","maxLength":140,"containsAny":["переведи ","translate "]},
+  {"id":"short_definition","description":"Short definition question","maxLength":120,"containsAny":["что означает ","что такое ","what is ","what does "]},
+  {"id":"literal_proofread","description":"Literal word correction","maxLength":140,"containsAny":["исправь слово","correct the word"]},
+  {"id":"simple_calculation","description":"Small arithmetic request","maxLength":80,"containsAny":["сколько будет","calculate "]},
+  {"id":"explicit_concise","description":"Explicit request for only a short answer","maxLength":180,"containsAny":["только ответ","без объяснений","answer only","no explanation"]},
+  {"id":"single_command","description":"A self-contained command that should remain literal","maxLength":300,"containsAny":["не меняй команду","do not change the command"]},
+  {"id":"already_compiled","description":"Compiler output headings","maxLength":5000,"containsAny":["требования к ответу:\n-","response requirements:\n-"]},
+  {"id":"well_structured","description":"Existing structured specification","maxLength":50000,"containsAny":["задача:\n","task:\n"]}
+]

@@ -1,7 +1,8 @@
-(() => {
+(async () => {
   "use strict";
 
   const BOOT_KEY = "__cgptQuickNavigationTempChat__";
+  const FEATURE_KEY = "tempChat";
   const TEMP_BTN_ID = "cgpt-temp-save-btn";
   const SAVE_WRAP_ID = "cgpt-save-dropdown-wrap";
   const TRANSFER_KEY = "cgpt_nav_transfer_payload";
@@ -11,6 +12,13 @@
   const HIDDEN_TOOLTIP_ATTR = "data-cgpt-temp-tooltip-hidden";
 
   if (window !== window.top) return;
+
+  if (
+    globalThis.CGPT_FEATURE_SETTINGS?.isEnabled &&
+    !(await globalThis.CGPT_FEATURE_SETTINGS.isEnabled(FEATURE_KEY))
+  ) {
+    return;
+  }
 
   if (globalThis[BOOT_KEY]?.scheduleCheck) {
     globalThis[BOOT_KEY].scheduleCheck();
@@ -308,8 +316,6 @@
       .querySelectorAll(
         [
           "[data-cgpt-ts]",
-          "[data-cgpt-nav]",
-          "#cgpt-nav-host",
           `#${TEMP_BTN_ID}`,
           `#${SAVE_WRAP_ID}`,
           "button",

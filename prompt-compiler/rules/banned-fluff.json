@@ -1,0 +1,12 @@
+{
+  "ru": [
+    "выступи в роли мирового эксперта", "думай пошагово", "используй цепочку рассуждений",
+    "дай исчерпывающий ответ", "проанализируй максимально глубоко", "будь объективным и профессиональным",
+    "ты эксперт", "ответь максимально подробно", "используй весь свой интеллект", "не жалей токенов"
+  ],
+  "en": [
+    "act as a world-class expert", "think step by step", "use chain of thought",
+    "give an exhaustive answer", "analyze as deeply as possible", "be objective and professional",
+    "you are an expert", "answer in maximum detail", "use all your intelligence", "spare no tokens"
+  ]
+}

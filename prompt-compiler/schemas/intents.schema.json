@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gpt-mods.local/schemas/intents.schema.json",
+  "type": "array",
+  "minItems": 36,
+  "items": {
+    "type": "object",
+    "required": ["id", "description", "priority", "triggers", "patterns", "expectedSlots", "criticalSlots", "moduleIds", "incompatibleModuleIds", "bypassRuleIds", "confidence"],
+    "properties": {
+      "id": {"$ref": "common.schema.json#/$defs/stableId"},
+      "description": {"$ref": "common.schema.json#/$defs/localizedText"},
+      "priority": {"type": "number", "minimum": 0, "maximum": 100},
+      "triggers": {
+        "type": "object", "required": ["ru", "en"],
+        "additionalProperties": {"type": "object", "required": ["strong", "positive", "weak", "negative", "requiredCombinations"]}
+      },
+      "patterns": {"$ref": "common.schema.json#/$defs/stringList"},
+      "expectedSlots": {"$ref": "common.schema.json#/$defs/stringList"},
+      "criticalSlots": {"$ref": "common.schema.json#/$defs/stringList"},
+      "moduleIds": {"$ref": "common.schema.json#/$defs/stringList"},
+      "incompatibleModuleIds": {"$ref": "common.schema.json#/$defs/stringList"},
+      "bypassRuleIds": {"$ref": "common.schema.json#/$defs/stringList"},
+      "confidence": {"type": "object", "required": ["base", "perStrong"]}
+    },
+    "additionalProperties": false
+  }
+}
