@@ -102,6 +102,10 @@
     '[data-cgpt-prompt-enhancer-toast]'
   ].join(",");
 
+  const NATIVE_ATTACHMENT_TRAY_ATTR = "data-cgpt-native-attachment-tray";
+  const ATTACHMENT_COMPAT_STYLE_ID = "cgpt-attachment-native-preview-style";
+  const ATTACHMENT_LIMIT = 10;
+
   function tr(value) {
     if (typeof value !== "string" || !value) return value;
     if (zh.has(value)) return zh.get(value);
@@ -159,6 +163,97 @@
     root.querySelectorAll("*").forEach(translateElement);
   }
 
+  function normalizeNativeAttachmentLabels(root) {
+    const nodes = [];
+
+    if (root instanceof Element && root.matches("[aria-label], [title]")) {
+      nodes.push(root);
+    }
+
+    if (root?.querySelectorAll) {
+      nodes.push(...root.querySelectorAll("[aria-label], [title]"));
+    }
+
+    for (const element of nodes) {
+      for (const attribute of ["aria-label", "title"]) {
+        const current = element.getAttribute(attribute) || "";
+        if (!current.includes("：")) continue;
+        if (!/^(?:移除|删除|刪除).+\.[a-zA-Z0-9]{1,6}$/u.test(current)) continue;
+        element.setAttribute(attribute, current.replace(/：/gu, ":"));
+      }
+    }
+  }
+
+  function canonicalAttachmentName(value) {
+    return (value || "")
+      .replace(/^(?:移除|删除|刪除)\s*(?:文件|附件)?\s*\d*\s*[：:]\s*/u, "")
+      .trim();
+  }
+
+  function ensureAttachmentCompatStyle() {
+    if (document.getElementById(ATTACHMENT_COMPAT_STYLE_ID)) return;
+
+    const style = document.createElement("style");
+    style.id = ATTACHMENT_COMPAT_STYLE_ID;
+    style.textContent = `
+      html .cgpt-composer-files-grid {
+        display: none !important;
+      }
+
+      html .cgpt-composer-files__overflow {
+        display: none !important;
+      }
+    `;
+    document.documentElement.appendChild(style);
+  }
+
+  function collectCompatAttachmentNames(host) {
+    const rawNames = [];
+    const items = Array.isArray(host?._cgptAttachmentItems)
+      ? host._cgptAttachmentItems
+      : [];
+
+    for (const item of items) {
+      if (item?.name) rawNames.push(item.name);
+    }
+
+    if (!rawNames.length && host?.querySelectorAll) {
+      host
+        .querySelectorAll(
+          ".cgpt-composer-file__name-copy, .cgpt-composer-files__overflow-name",
+        )
+        .forEach((element) => {
+          const value = element.textContent?.trim();
+          if (value) rawNames.push(value);
+        });
+    }
+
+    return Array.from(
+      new Set(rawNames.map(canonicalAttachmentName).filter(Boolean)),
+    );
+  }
+
+  function refreshAttachmentCompat() {
+    ensureAttachmentCompatStyle();
+    normalizeNativeAttachmentLabels(document);
+
+    document
+      .querySelectorAll(`[${NATIVE_ATTACHMENT_TRAY_ATTR}="1"]`)
+      .forEach((element) => element.removeAttribute(NATIVE_ATTACHMENT_TRAY_ATTR));
+
+    const host = document.querySelector('[data-cgpt-composer-files="1"]');
+    if (!host) return;
+
+    const names = collectCompatAttachmentNames(host);
+    if (!names.length) return;
+
+    const count = host.querySelector(".cgpt-composer-files__count");
+    if (!count) return;
+
+    count.textContent = `${names.length}/${ATTACHMENT_LIMIT}`;
+    count.classList.toggle("is-over-limit", names.length > ATTACHMENT_LIMIT);
+  }
+
   function localizeAddedNode(node) {
     if (!node) return;
 
@@ -168,6 +263,8 @@
     }
 
     if (!(node instanceof Element)) return;
+
+    normalizeNativeAttachmentLabels(node);
 
     if (node.matches(OWNED_SELECTOR)) {
       translateOwnedTree(node);
@@ -179,16 +276,26 @@
 
   function initialLocalize() {
     document.querySelectorAll(OWNED_SELECTOR).forEach(translateElement);
+    normalizeNativeAttachmentLabels(document);
   }
 
   const pending = new Set();
   let frame = 0;
+  let attachmentCompatFrame = 0;
 
   function flushPending() {
     frame = 0;
     const nodes = Array.from(pending);
     pending.clear();
     nodes.forEach(localizeAddedNode);
+  }
+
+  function scheduleAttachmentCompat() {
+    if (attachmentCompatFrame) return;
+    attachmentCompatFrame = requestAnimationFrame(() => {
+      attachmentCompatFrame = 0;
+      refreshAttachmentCompat();
+    });
   }
 
   const observer = new MutationObserver((mutations) => {
@@ -201,16 +308,30 @@
     }
   });
 
+  const attachmentCompatObserver = new MutationObserver(() => {
+    scheduleAttachmentCompat();
+  });
+
   observer.observe(document.documentElement, {
     childList: true,
     subtree: true
   });
 
+  attachmentCompatObserver.observe(document.documentElement, {
+    childList: true,
+    subtree: true,
+    attributes: true,
+    attributeFilter: [NATIVE_ATTACHMENT_TRAY_ATTR, "aria-label", "title"]
+  });
+
   initialLocalize();
+  refreshAttachmentCompat();
 
   globalThis.__cgptModsZhCN__ = {
     observer,
+    attachmentCompatObserver,
     refresh: initialLocalize,
+    refreshAttachmentCompat,
     translate: tr
   };
 })();
