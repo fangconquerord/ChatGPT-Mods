@@ -14,35 +14,35 @@ const DEFAULTS = {
 const FEATURES = [
   {
     key: "chatExport",
-    title: "Сохранение чата",
-    desc: "Экспорт текущего чата в PDF, Word или TXT",
+    title: "保存聊天",
+    desc: "将当前聊天导出为 PDF、Word 或 TXT",
   },
   {
     key: "splitView",
-    title: "Split",
-    desc: "Два чата рядом на одном экране",
+    title: "分屏视图",
+    desc: "在同一屏幕中并排打开两个聊天",
   },
   {
     key: "fileInfo",
-    title: "Информация о файлах",
-    desc: "Подсказки по вложениям и метаданные сообщений",
+    title: "文件信息",
+    desc: "显示附件提示和消息元数据",
   },
   {
     key: "promptEnhancer",
-    title: "Улучшение запроса",
-    desc: "Локальный Prompt Compiler рядом с полем ввода",
+    title: "优化提示词",
+    desc: "在输入框旁使用本地 Prompt Compiler",
   },
   {
     key: "tempChat",
-    title: "Сохранение временного чата",
-    desc: "Перенос временного диалога в обычный чат",
+    title: "保存临时聊天",
+    desc: "将临时聊天内容迁移到普通聊天",
   },
 ];
 
 FEATURES.push({
   key: "chatOrganizer",
-  title: "Папки и оформление чатов",
-  desc: "Локальные группы, цвета и иконки в боковом списке",
+  title: "聊天文件夹与外观",
+  desc: "在侧边栏中使用本地文件夹、颜色和图标整理聊天",
 });
 
 const listEl = document.getElementById("settings-list");
@@ -104,11 +104,11 @@ function scheduleChatGptReload() {
 
     if (isChatGptTab(tab) && tab.id !== undefined) {
       chrome.tabs.reload(tab.id);
-      statusEl.textContent = "Настройки сохранены. Страница ChatGPT обновляется.";
+      statusEl.textContent = "设置已保存，正在刷新 ChatGPT 页面。";
       return;
     }
 
-    statusEl.textContent = "Настройки сохранены.";
+    statusEl.textContent = "设置已保存。";
   }, 450);
 }
 
@@ -150,7 +150,7 @@ function render(settings) {
         [key]: input.checked,
       };
 
-      statusEl.textContent = "Сохраняю...";
+      statusEl.textContent = "正在保存...";
       await setSettings(currentSettings);
       scheduleChatGptReload();
     });
@@ -170,15 +170,15 @@ async function init() {
   const resetButton = document.getElementById("reset-chat-organizer");
   resetButton?.addEventListener("click", async () => {
     const confirmed = window.confirm(
-      "Удалить все пользовательские папки, цвета и иконки чатов? Это действие нельзя отменить.",
+      "确定删除所有自定义文件夹、聊天颜色和图标吗？此操作无法撤销。",
     );
     if (!confirmed) return;
 
     resetButton.disabled = true;
-    statusEl.textContent = "Удаляю настройки папок...";
+    statusEl.textContent = "正在删除文件夹设置...";
     await resetChatOrganizer();
     resetButton.disabled = false;
-    statusEl.textContent = "Папки, цвета и иконки удалены.";
+    statusEl.textContent = "文件夹、颜色和图标已删除。";
   });
 
   statusEl.textContent = "";

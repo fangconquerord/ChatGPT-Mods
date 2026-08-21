@@ -1,8 +1,9 @@
 {
   "manifest_version": 3,
-  "name": "ChatGPT Mods",
-  "version": "1.2.1",
-  "description": "Локальные улучшения интерфейса ChatGPT на chatgpt.com.",
+  "name": "ChatGPT Mods 中文版",
+  "version": "1.2.1.1",
+  "version_name": "1.2.1-cn.1",
+  "description": "为 chatgpt.com 提供分屏、聊天导出、临时聊天保存、文件夹整理和本地提示词优化等界面增强。",
   "host_permissions": [
     "https://chatgpt.com/*"
   ],
@@ -37,6 +38,7 @@
         "https://chatgpt.com/*"
       ],
       "js": [
+        "content-zh-CN.js",
         "content-settings.js",
         "content-chat-exporter.js",
         "content-chat-organizer.js",
