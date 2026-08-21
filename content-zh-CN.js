@@ -87,99 +87,130 @@
     ["Не удалось найти сообщения в чате.", "无法找到聊天消息。"]
   ]);
 
-  function tr(s) {
-    if (typeof s !== "string" || !s) return s;
-    if (zh.has(s)) return zh.get(s);
-    let m = s.match(/^Удалить папку «(.+)»\? Чаты останутся, но выйдут из этой папки\.$/u);
-    if (m) return `删除文件夹“${m[1]}”？聊天不会被删除，只会移出该文件夹。`;
-    m = s.match(/^Удалить (.+)$/u);
-    if (m) return `删除 ${m[1]}`;
-    m = s.match(/^Изображение (\d+) присутствует в исходном чате$/u);
-    if (m) return `原聊天中包含图片 ${m[1]}`;
-    return s;
+  const OWNED_SELECTOR = [
+    '[id^="cgpt-"]',
+    '[class*="cgpt-"]',
+    '[class*="chat-export__"]',
+    '[data-cgpt-chat-export-control]',
+    '[data-cgpt-chat-export-snippet]',
+    '[data-cgpt-chat-group]',
+    '[data-cgpt-chat-row]',
+    '[data-cgpt-chat-organizer-control]',
+    '[data-cgpt-chat-organizer-menu]',
+    '[data-cgpt-composer-files]',
+    '[data-cgpt-prompt-enhancer]',
+    '[data-cgpt-prompt-enhancer-toast]'
+  ].join(",");
+
+  function tr(value) {
+    if (typeof value !== "string" || !value) return value;
+    if (zh.has(value)) return zh.get(value);
+
+    let match = value.match(/^Удалить папку «(.+)»\? Чаты останутся, но выйдут из этой папки\.$/u);
+    if (match) return `删除文件夹“${match[1]}”？聊天不会被删除，只会移出该文件夹。`;
+
+    match = value.match(/^Удалить (.+)$/u);
+    if (match) return `删除 ${match[1]}`;
+
+    match = value.match(/^Изображение (\d+) присутствует в исходном чате$/u);
+    if (match) return `原聊天中包含图片 ${match[1]}`;
+
+    return value;
   }
 
-  function transferText(s) {
-    if (typeof s !== "string") return s;
-    return s
-      .replace("Продолжай этот чат. Ниже полная история временного чата в порядке сообщений.", "请继续这个聊天。下面按消息顺序提供临时聊天的完整历史记录。")
-      .replace("Сохрани роли собеседников, учитывай текст, файлы и изображения из переписки.", "请保留对话双方的角色，并结合聊天中的文本、文件和图片理解上下文。")
-      .replace(/\[(\d+)\] Пользователь/g, "[$1] 用户")
-      .replace(/(^|\n)Текст:/g, "$1文本：")
-      .replace(/(^|\n)Файлы:/g, "$1文件：")
-      .replace(/(^|\n)Изображения:/g, "$1图片：")
-      .replace("Продолжай этот чат дальше и учитывай весь контекст выше.", "请基于以上全部上下文继续这个聊天。");
+  function isOwned(element) {
+    return Boolean(element?.closest?.(OWNED_SELECTOR));
   }
 
-  function owned(el) {
-    for (let cur = el, n = 0; cur && n < 10; cur = cur.parentElement, n++) {
-      if (cur.id?.startsWith("cgpt-")) return true;
-      if ([...cur.classList || []].some(x => x.startsWith("cgpt-") || x.startsWith("chat-export__"))) return true;
-      if ([...cur.attributes || []].some(x => x.name.startsWith("data-cgpt-"))) return true;
-    }
-    return false;
-  }
+  function translateTextNode(node) {
+    const value = node?.nodeValue || "";
+    if (!value.trim()) return;
 
-  function localize(root) {
-    if (!root) return;
-    const nodes = [];
-    if (root.nodeType === Node.ELEMENT_NODE) nodes.push(root);
-    if (root.querySelectorAll) nodes.push(...root.querySelectorAll("*"));
-    for (const el of nodes) {
-      if (!owned(el)) continue;
-      for (const a of ["title", "aria-label", "placeholder"]) {
-        if (el.hasAttribute(a)) el.setAttribute(a, tr(el.getAttribute(a)));
-      }
-      for (const node of el.childNodes) {
-        if (node.nodeType !== Node.TEXT_NODE) continue;
-        const v = node.nodeValue || "";
-        const lead = v.match(/^\s*/u)?.[0] || "";
-        const tail = v.match(/\s*$/u)?.[0] || "";
-        const core = v.slice(lead.length, v.length - tail.length);
-        const next = tr(core);
-        if (next !== core) node.nodeValue = lead + next + tail;
-      }
+    const leading = value.match(/^\s*/u)?.[0] || "";
+    const trailing = value.match(/\s*$/u)?.[0] || "";
+    const core = value.slice(leading.length, value.length - trailing.length);
+    const translated = tr(core);
+
+    if (translated !== core) {
+      node.nodeValue = leading + translated + trailing;
     }
   }
 
-  const observer = new MutationObserver(ms => {
-    for (const m of ms) {
-      if (m.type === "attributes") localize(m.target);
-      for (const n of m.addedNodes || []) localize(n);
+  function translateElement(element) {
+    if (!(element instanceof Element)) return;
+
+    for (const attribute of ["title", "aria-label", "placeholder"]) {
+      if (!element.hasAttribute(attribute)) continue;
+      const current = element.getAttribute(attribute) || "";
+      const translated = tr(current);
+      if (translated !== current) {
+        element.setAttribute(attribute, translated);
+      }
+    }
+
+    for (const node of element.childNodes) {
+      if (node.nodeType === Node.TEXT_NODE) translateTextNode(node);
+    }
+  }
+
+  function translateOwnedTree(root) {
+    if (!(root instanceof Element)) return;
+    translateElement(root);
+    root.querySelectorAll("*").forEach(translateElement);
+  }
+
+  function localizeAddedNode(node) {
+    if (!node) return;
+
+    if (node.nodeType === Node.TEXT_NODE) {
+      if (isOwned(node.parentElement)) translateTextNode(node);
+      return;
+    }
+
+    if (!(node instanceof Element)) return;
+
+    if (node.matches(OWNED_SELECTOR)) {
+      translateOwnedTree(node);
+      return;
+    }
+
+    node.querySelectorAll(OWNED_SELECTOR).forEach(translateOwnedTree);
+  }
+
+  function initialLocalize() {
+    document.querySelectorAll(OWNED_SELECTOR).forEach(translateElement);
+  }
+
+  const pending = new Set();
+  let frame = 0;
+
+  function flushPending() {
+    frame = 0;
+    const nodes = Array.from(pending);
+    pending.clear();
+    nodes.forEach(localizeAddedNode);
+  }
+
+  const observer = new MutationObserver((mutations) => {
+    for (const mutation of mutations) {
+      for (const node of mutation.addedNodes) pending.add(node);
+    }
+
+    if (!frame && pending.size) {
+      frame = requestAnimationFrame(flushPending);
     }
   });
-  observer.observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ["title", "aria-label", "placeholder"] });
-  localize(document);
 
-  const alert0 = window.alert.bind(window);
-  const confirm0 = window.confirm.bind(window);
-  const prompt0 = window.prompt.bind(window);
-  window.alert = m => alert0(tr(String(m ?? "")));
-  window.confirm = m => confirm0(tr(String(m ?? "")));
-  window.prompt = (m, d) => prompt0(tr(String(m ?? "")), d == null ? d : tr(String(d)));
+  observer.observe(document.documentElement, {
+    childList: true,
+    subtree: true
+  });
 
-  const set0 = globalThis.chrome?.storage?.local?.set?.bind(globalThis.chrome.storage.local);
-  if (set0) {
-    try {
-      globalThis.chrome.storage.local.set = (items, cb) => {
-        const next = items && typeof items === "object" ? { ...items } : items;
-        if (next && typeof next === "object") {
-          for (const [k, v] of Object.entries(next)) {
-            if (k.startsWith("cgpt_nav_transfer_payload:") && v && typeof v === "object") next[k] = { ...v, text: transferText(v.text) };
-          }
-        }
-        return set0(next, cb);
-      };
-    } catch (_) {}
-  }
+  initialLocalize();
 
-  const pm0 = Window.prototype.postMessage;
-  try {
-    Window.prototype.postMessage = function (m, origin, transfer) {
-      const next = m?.type === "cgpt-temp-transfer" ? { ...m, text: transferText(m.text) } : m;
-      return arguments.length >= 3 ? pm0.call(this, next, origin, transfer) : pm0.call(this, next, origin);
-    };
-  } catch (_) {}
-
-  globalThis.__cgptModsZhCN__ = { observer, refresh: () => localize(document), translate: tr };
+  globalThis.__cgptModsZhCN__ = {
+    observer,
+    refresh: initialLocalize,
+    translate: tr
+  };
 })();
