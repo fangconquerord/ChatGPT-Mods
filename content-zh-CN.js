@@ -1,11 +1,9 @@
 (() => {
   "use strict";
 
-  const BOOT_KEY = "__cgptModsZhCN__";
-  if (globalThis[BOOT_KEY]) return;
+  if (globalThis.__cgptModsZhCN__) return;
 
-  const TEXT_MAP = new Map([
-    // Chat export
+  const zh = new Map([
     ["Сохранить", "保存"],
     ["Сохранить чат", "保存聊天"],
     ["Сохраняю...", "正在保存..."],
@@ -38,9 +36,6 @@
     ["Подготавливаю чат для печати…", "正在准备聊天内容以供打印…"],
     ["Не удалось найти сообщения текущего чата.", "无法找到当前聊天中的消息。"],
     ["Некорректные данные изображения.", "图片数据无效。"],
-    ["Браузер заблокировал окно печати. Разрешите всплывающие окна для chatgpt.com.", "浏览器阻止了打印窗口。请允许 chatgpt.com 弹出窗口。"],
-
-    // Chat organizer
     ["Красный", "红色"],
     ["Оранжевый", "橙色"],
     ["Жёлтый", "黄色"],
@@ -70,15 +65,9 @@
     ["Иконка", "图标"],
     ["Без цвета", "无颜色"],
     ["Без иконки", "无图标"],
-    ["Перетащите чат сюда, чтобы убрать его из папки", "将聊天拖到这里以移出文件夹"],
-    ["Перетащите сюда, чтобы убрать чат из папки", "拖到这里以将聊天移出文件夹"],
-
-    // Attachment information
     ["Прикреплённые файлы", "已附加文件"],
     ["Файлы сверх лимита", "超出上限的文件"],
     ["Сверх лимита:", "超出上限："],
-
-    // Prompt enhancer
     ["Улучшить запрос", "优化提示词"],
     ["Сначала напишите запрос.", "请先输入提示词。"],
     ["Похоже, тут нечего улучшать.", "当前内容似乎无需优化。"],
@@ -89,53 +78,108 @@
     ["Запрос улучшен. Отменить можно через Ctrl+Z.", "提示词已优化，可按 Ctrl+Z 撤销。"],
     ["Не получилось заменить текст запроса.", "无法替换提示词文本。"],
     ["Не удалось улучшить запрос. Исходный текст сохранён.", "无法优化提示词，原始文本已保留。"],
-    ["Локальный Prompt Compiler не загружен", "本地 Prompt Compiler 未加载"],
-
-    // Split view
     ["Открыть два чата рядом", "并排打开两个聊天"],
     ["Split view - два чата рядом", "分屏视图 - 并排显示两个聊天"],
     ["Чат 1", "聊天 1"],
     ["Чат 2", "聊天 2"],
     ["Закрыть split view", "关闭分屏视图"],
     ["Закрыть split", "关闭分屏"],
-
-    // Temporary chat
-    ["Не удалось найти сообщения в чате.", "无法找到聊天消息。"],
+    ["Не удалось найти сообщения в чате.", "无法找到聊天消息。"]
   ]);
 
-  const DYNAMIC_RULES = [
-    {
-      pattern: /^Удалить папку «(.+)»\? Чаты останутся, но выйдут из этой папки\.$/u,
-      replace: (_match, name) => `删除文件夹“${name}”？聊天不会被删除，只会移出该文件夹。`,
-    },
-    {
-      pattern: /^Удалить (.+)$/u,
-      replace: (_match, name) => `删除 ${name}`,
-    },
-    {
-      pattern: /^Изображение (\d+) присутствует в исходном чате$/u,
-      replace: (_match, index) => `原聊天中包含图片 ${index}`,
-    },
-  ];
-
-  function translateString(value) {
-    if (typeof value !== "string" || !value) return value;
-    const exact = TEXT_MAP.get(value);
-    if (exact) return exact;
-
-    for (const rule of DYNAMIC_RULES) {
-      const match = value.match(rule.pattern);
-      if (match) return rule.replace(...match);
-    }
-
-    return value;
+  function tr(s) {
+    if (typeof s !== "string" || !s) return s;
+    if (zh.has(s)) return zh.get(s);
+    let m = s.match(/^Удалить папку «(.+)»\? Чаты останутся, но выйдут из этой папки\.$/u);
+    if (m) return `删除文件夹“${m[1]}”？聊天不会被删除，只会移出该文件夹。`;
+    m = s.match(/^Удалить (.+)$/u);
+    if (m) return `删除 ${m[1]}`;
+    m = s.match(/^Изображение (\d+) присутствует в исходном чате$/u);
+    if (m) return `原聊天中包含图片 ${m[1]}`;
+    return s;
   }
 
-
-  function translateTransferText(value) {
-    if (typeof value !== "string" || !value) return value;
-    return value
+  function transferText(s) {
+    if (typeof s !== "string") return s;
+    return s
       .replace("Продолжай этот чат. Ниже полная история временного чата в порядке сообщений.", "请继续这个聊天。下面按消息顺序提供临时聊天的完整历史记录。")
-      .replace("Сохрани роли собеседников, учитывай текст, файлы и изображения из переписки.", "请保留对话双方嶒视，并结合聊天中的新本、文件和图片理胣上下文。")
+      .replace("Сохрани роли собеседников, учитывай текст, файлы и изображения из переписки.", "请保留对话双方的角色，并结合聊天中的文本、文件和图片理解上下文。")
       .replace(/\[(\d+)\] Пользователь/g, "[$1] 用户")
-      .replace(/(^|\n)Текст:
+      .replace(/(^|\n)Текст:/g, "$1文本：")
+      .replace(/(^|\n)Файлы:/g, "$1文件：")
+      .replace(/(^|\n)Изображения:/g, "$1图片：")
+      .replace("Продолжай этот чат дальше и учитывай весь контекст выше.", "请基于以上全部上下文继续这个聊天。");
+  }
+
+  function owned(el) {
+    for (let cur = el, n = 0; cur && n < 10; cur = cur.parentElement, n++) {
+      if (cur.id?.startsWith("cgpt-")) return true;
+      if ([...cur.classList || []].some(x => x.startsWith("cgpt-") || x.startsWith("chat-export__"))) return true;
+      if ([...cur.attributes || []].some(x => x.name.startsWith("data-cgpt-"))) return true;
+    }
+    return false;
+  }
+
+  function localize(root) {
+    if (!root) return;
+    const nodes = [];
+    if (root.nodeType === Node.ELEMENT_NODE) nodes.push(root);
+    if (root.querySelectorAll) nodes.push(...root.querySelectorAll("*"));
+    for (const el of nodes) {
+      if (!owned(el)) continue;
+      for (const a of ["title", "aria-label", "placeholder"]) {
+        if (el.hasAttribute(a)) el.setAttribute(a, tr(el.getAttribute(a)));
+      }
+      for (const node of el.childNodes) {
+        if (node.nodeType !== Node.TEXT_NODE) continue;
+        const v = node.nodeValue || "";
+        const lead = v.match(/^\s*/u)?.[0] || "";
+        const tail = v.match(/\s*$/u)?.[0] || "";
+        const core = v.slice(lead.length, v.length - tail.length);
+        const next = tr(core);
+        if (next !== core) node.nodeValue = lead + next + tail;
+      }
+    }
+  }
+
+  const observer = new MutationObserver(ms => {
+    for (const m of ms) {
+      if (m.type === "attributes") localize(m.target);
+      for (const n of m.addedNodes || []) localize(n);
+    }
+  });
+  observer.observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ["title", "aria-label", "placeholder"] });
+  localize(document);
+
+  const alert0 = window.alert.bind(window);
+  const confirm0 = window.confirm.bind(window);
+  const prompt0 = window.prompt.bind(window);
+  window.alert = m => alert0(tr(String(m ?? "")));
+  window.confirm = m => confirm0(tr(String(m ?? "")));
+  window.prompt = (m, d) => prompt0(tr(String(m ?? "")), d == null ? d : tr(String(d)));
+
+  const set0 = globalThis.chrome?.storage?.local?.set?.bind(globalThis.chrome.storage.local);
+  if (set0) {
+    try {
+      globalThis.chrome.storage.local.set = (items, cb) => {
+        const next = items && typeof items === "object" ? { ...items } : items;
+        if (next && typeof next === "object") {
+          for (const [k, v] of Object.entries(next)) {
+            if (k.startsWith("cgpt_nav_transfer_payload:") && v && typeof v === "object") next[k] = { ...v, text: transferText(v.text) };
+          }
+        }
+        return set0(next, cb);
+      };
+    } catch (_) {}
+  }
+
+  const pm0 = Window.prototype.postMessage;
+  try {
+    Window.prototype.postMessage = function (m, origin, transfer) {
+      const next = m?.type === "cgpt-temp-transfer" ? { ...m, text: transferText(m.text) } : m;
+      return arguments.length >= 3 ? pm0.call(this, next, origin, transfer) : pm0.call(this, next, origin);
+    };
+  } catch (_) {}
+
+  globalThis.__cgptModsZhCN__ = { observer, refresh: () => localize(document), translate: tr };
+})();
