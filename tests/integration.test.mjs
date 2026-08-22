@@ -171,7 +171,7 @@ test("chat export is shipped with a feature toggle and a local downloads handler
   assert.ok(manifest.content_scripts[0].js.includes("content-chat-exporter.js"));
   assert.match(source, /const FEATURE_KEY = "chatExport"/u);
   assert.match(source, /Word \(\.rtf\)/u);
-  assert.match(source, /formatButton\("print", "Печать"/u);
+  assert.match(source, /formatButton\("print", "打印"/u);
   assert.match(source, /application\/pdf/u);
   assert.match(source, /openPdfDialog/u);
   assert.match(source, /inlineImages/u);
