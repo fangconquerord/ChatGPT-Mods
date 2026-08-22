@@ -5,7 +5,10 @@
   if (!core) throw new Error("Prompt Compiler namespace is not initialized");
 
   const TOKEN_PATTERN = /\uE000GPTMODS_([A-Z_]+)_(\d{4})\uE001/g;
-  const MAX_MATCHES = 256;
+  const MAX_MATCHES_PER_PATTERN = 256;
+  const MAX_TOTAL_MATCHES = 512;
+  let cachedDefinitions = null;
+  let cachedPatterns = null;
 
   function assertSafePattern(definition) {
     if (!definition || typeof definition.id !== "string") {
@@ -24,7 +27,9 @@
   }
 
   function compilePatterns(definitions) {
-    return definitions.map((definition) => {
+    if (definitions === cachedDefinitions && cachedPatterns) return cachedPatterns;
+
+    const compiled = (definitions || []).map((definition) => {
       assertSafePattern(definition);
       try {
         return {
@@ -35,6 +40,10 @@
         throw new Error(`Protected pattern ${definition.id} cannot compile: ${error.message}`);
       }
     });
+
+    cachedDefinitions = definitions;
+    cachedPatterns = compiled;
+    return compiled;
   }
 
   function protectText(text, patternDefinitions) {
@@ -43,10 +52,18 @@
     const patterns = compilePatterns(patternDefinitions || []);
 
     for (const definition of patterns) {
+      if (fragments.length >= MAX_TOTAL_MATCHES) break;
       let count = 0;
       definition.regex.lastIndex = 0;
       maskedText = maskedText.replace(definition.regex, (value) => {
-        if (count >= MAX_MATCHES || value.includes("\uE000GPTMODS_")) return value;
+        if (
+          count >= MAX_MATCHES_PER_PATTERN ||
+          fragments.length >= MAX_TOTAL_MATCHES ||
+          value.includes("\uE000GPTMODS_")
+        ) {
+          return value;
+        }
+
         count += 1;
         const index = fragments.length;
         const type = definition.type || definition.id.toUpperCase().replace(/[^A-Z_]/g, "_");
@@ -91,6 +108,8 @@
 
   core.components.protection = {
     TOKEN_PATTERN,
+    MAX_MATCHES_PER_PATTERN,
+    MAX_TOTAL_MATCHES,
     assertSafePattern,
     compilePatterns,
     protectText,
