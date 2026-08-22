@@ -6,17 +6,23 @@ async function source(path) {
   return readFile(new URL(`../${path}`, import.meta.url), "utf8");
 }
 
-test("runtime ships without global MutationObserver monkey patches", async () => {
+test("runtime is top-frame only and excludes legacy streaming observers", async () => {
   const manifest = JSON.parse(await source("manifest.json"));
-  const scripts = manifest.content_scripts[0].js;
+  const entry = manifest.content_scripts[0];
+  const scripts = entry.js;
+
+  assert.equal(entry.all_frames, false);
   assert.ok(!scripts.includes("content-performance-guard.js"));
   assert.ok(!scripts.includes("content-zh-CN-performance-fix.js"));
+  assert.ok(!scripts.includes("content-zh-CN.js"));
+  assert.ok(!scripts.includes("content-message-meta.js"));
+  assert.ok(scripts.includes("content-message-meta-lite.js"));
+
   for (const runtime of [
-    "content-zh-CN.js",
     "content-chat-exporter.js",
     "content-chat-organizer.js",
     "content-temp-chat.js",
-    "content-message-meta.js",
+    "content-message-meta-lite.js",
     "content-prompt-enhancer.js",
     "content-split-view.js",
   ]) {
@@ -24,26 +30,19 @@ test("runtime ships without global MutationObserver monkey patches", async () =>
   }
 });
 
-test("Chinese localization ignores unrelated ChatGPT streaming subtrees", async () => {
-  const zh = await source("content-zh-CN.js");
-  assert.doesNotMatch(zh, /normalizeNativeAttachmentLabels\(document\)/u);
-  assert.doesNotMatch(zh, /attachmentCompatObserver\.observe\(document\.documentElement/u);
-  assert.match(zh, /function attachAttachmentHost\(/u);
-  assert.match(zh, /function attachAttachmentTray\(/u);
-  assert.match(zh, /function nodeNeedsLocalization\(/u);
-  assert.match(zh, /if \(!nodeNeedsLocalization\(node\)\) return/u);
-});
-
-test("message metadata processes new messages and composer changes incrementally", async () => {
-  const meta = await source("content-message-meta.js");
-  assert.match(meta, /const pendingMessages = new Set\(\)/u);
-  assert.match(meta, /function collectMessagesFromNode\(/u);
-  assert.match(meta, /function mutationTouchesComposer\(/u);
+test("message metadata never observes streaming DOM", async () => {
+  const meta = await source("content-message-meta-lite.js");
+  assert.match(meta, /requestIdleCallback/u);
+  assert.match(meta, /backend-api\/conversation/u);
   assert.match(meta, /function currentConversationPath\(/u);
-  assert.doesNotMatch(meta, /new MutationObserver\(scheduleRun\)/u);
+  assert.match(meta, /function upsertFooterTimestamp\(/u);
+  assert.doesNotMatch(meta, /MutationObserver/u);
+  assert.doesNotMatch(meta, /getBoundingClientRect/u);
+  assert.doesNotMatch(meta, /getComputedStyle/u);
+  assert.doesNotMatch(meta, /querySelectorAll\("button/u);
 });
 
-test("chat exporter scopes code and copy-button work to added subtrees", async () => {
+test("chat exporter scopes code and copy-button work to relevant added subtrees", async () => {
   const exporter = await source("content-chat-exporter.js");
   assert.match(exporter, /MUTATION_RELEVANT_SELECTOR/u);
   assert.match(exporter, /function addCodeButtons\(root = document\)/u);
