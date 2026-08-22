@@ -48,14 +48,14 @@ test("manifest loads the compiler before the composer integration", async () => 
   assert.ok(scripts.indexOf("prompt-compiler/synthesis.js") < scripts.indexOf("prompt-compiler/renderer.js"));
 });
 
-test("chat organizer ships for every frame and retains native chat controls", async () => {
+test("chat organizer is injected only in the top frame and retains native chat controls", async () => {
   const manifest = JSON.parse(await readFile(new URL("../manifest.json", import.meta.url), "utf8"));
   const scripts = manifest.content_scripts[0].js;
   const source = await readFile(new URL("../content-chat-organizer.js", import.meta.url), "utf8");
   const popup = await readFile(new URL("../popup.js", import.meta.url), "utf8");
 
   assert.ok(scripts.includes("content-chat-organizer.js"));
-  assert.equal(manifest.content_scripts[0].all_frames, true);
+  assert.equal(manifest.content_scripts[0].all_frames, false);
   assert.match(source, /const STORAGE_KEY = "cgptChatOrganizer"/u);
   assert.match(source, /const GROUP_HOST_ATTR = "data-cgpt-chat-group"/u);
   assert.match(source, /function isNativePinned\(anchor, row\)/u);
@@ -95,35 +95,22 @@ test("content integration uses the compiler and retains native undo guidance", a
   assert.doesNotMatch(source, /buildEnhancedPrompt/u);
 });
 
-test("composer attachment shelf uses five columns and only invokes verified remove controls", async () => {
-  const source = await readFile(new URL("../content-message-meta.js", import.meta.url), "utf8");
-  assert.match(source, /const ATTACHMENT_LIMIT = 10/u);
-  assert.match(source, /grid-template-columns: repeat\(var\(--cgpt-file-columns, \$\{ATTACHMENT_LIMIT\}\), minmax\(0, 1fr\)\)/u);
-  assert.match(source, /const visibleItems = items\.slice\(0, ATTACHMENT_LIMIT\)/u);
-  assert.match(source, /const overLimitItems = items\.slice\(ATTACHMENT_LIMIT\)/u);
-  assert.match(source, /String\(Math\.max\(1, Math\.min\(5, visibleItems\.length\)\)\)/u);
-  assert.match(source, /function isNativeRemoveControl\(control\)/u);
-  assert.match(source, /const nativeRemoveControlCache = new WeakMap\(\)/u);
-  assert.match(source, /function removeAttachment\(item\)/u);
-  assert.match(source, /const currentItem = form/u);
-  assert.match(source, /collectComposerAttachmentData\(\)\.items\.find/u);
-  assert.match(source, /control\.closest\("a, \[download\]"\)/u);
-  assert.doesNotMatch(source, /controls\.length === 1 && depth <= 4/u);
-  assert.doesNotMatch(source, /deferredOverflowFiles/u);
-  assert.doesNotMatch(source, /item\.source === nextItems\[index\]\.source/u);
-  assert.match(source, /cgpt-composer-files__count\.is-over-limit/u);
-  assert.match(source, /cgpt-composer-files__overflow-file/u);
-  assert.match(source, /@keyframes cgpt-composer-file-marquee/u);
-  assert.match(source, /--cgpt-marquee-duration/u);
-  assert.match(source, /--cgpt-marquee-offset/u);
-  assert.match(source, /const travelDistance = Math\.ceil\(nameWidth - viewport\.clientWidth\)/u);
-  assert.match(source, /0%, 8% \{ transform: translateX\(0\); \}/u);
-  assert.match(source, /40%, 55% \{ transform: translateX\(var\(--cgpt-marquee-offset, -50%\)\); \}/u);
-  assert.match(source, /90%, 100% \{ transform: translateX\(0\); \}/u);
-  assert.match(source, /Math\.max\(8, travelDistance \/ 8\)/u);
-  assert.doesNotMatch(source, /const repeatedName/u);
-  assert.match(source, /prefers-reduced-motion/u);
-  assert.match(source, /items\.some\(\(item\) => !item\.removeControl\)/u);
+test("message metadata is idle-only and leaves ChatGPT native attachments untouched", async () => {
+  const manifest = JSON.parse(await readFile(new URL("../manifest.json", import.meta.url), "utf8"));
+  const scripts = manifest.content_scripts[0].js;
+  const source = await readFile(new URL("../content-message-meta-lite.js", import.meta.url), "utf8");
+
+  assert.ok(scripts.includes("content-message-meta-lite.js"));
+  assert.ok(!scripts.includes("content-message-meta.js"));
+  assert.ok(!scripts.includes("content-zh-CN.js"));
+  assert.match(source, /requestIdleCallback/u);
+  assert.match(source, /backend-api\/conversation/u);
+  assert.match(source, /function currentConversationPath\(/u);
+  assert.match(source, /function upsertFooterTimestamp\(/u);
+  assert.doesNotMatch(source, /MutationObserver/u);
+  assert.doesNotMatch(source, /NATIVE_ATTACHMENT_TRAY_ATTR/u);
+  assert.doesNotMatch(source, /ATTACHMENT_LIMIT/u);
+  assert.doesNotMatch(source, /getBoundingClientRect/u);
 });
 
 test("candidate generation is bounded", () => {
