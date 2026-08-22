@@ -120,11 +120,15 @@
   async function saveTempChat() {
     const transcript = collectTranscript();
     if (!transcript) return window.alert("未找到当前临时聊天内容。");
+    const win = window.open("about:blank", "_blank");
+    if (!win) {
+      window.alert("浏览器阻止了新标签页，请允许弹出窗口后重试。");
+      return;
+    }
     const token = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
     const prompt = `请继续以下临时聊天。以下内容仅作为此前对话上下文，不需要逐字复述：\n\n${transcript}`;
     await storageSet(`${TRANSFER_KEY}:${token}`, { text: prompt, createdAt: Date.now() });
-    const win = window.open(`${location.origin}/${HASH_PREFIX}${encodeURIComponent(token)}`, "_blank");
-    if (!win) window.alert("浏览器阻止了新标签页，请允许弹出窗口后重试。");
+    win.location.replace(`${location.origin}/${HASH_PREFIX}${encodeURIComponent(token)}`);
   }
 
   function ensureButton() {
