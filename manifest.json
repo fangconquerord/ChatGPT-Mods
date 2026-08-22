@@ -39,6 +39,7 @@
       ],
       "js": [
         "content-zh-CN.js",
+        "content-zh-CN-performance-fix.js",
         "content-settings.js",
         "content-chat-exporter.js",
         "content-chat-organizer.js",
