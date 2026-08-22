@@ -12,19 +12,26 @@ test("runtime is top-frame only and excludes legacy streaming observers", async 
   const scripts = entry.js;
 
   assert.equal(entry.all_frames, false);
-  assert.ok(!scripts.includes("content-performance-guard.js"));
-  assert.ok(!scripts.includes("content-zh-CN-performance-fix.js"));
-  assert.ok(!scripts.includes("content-zh-CN.js"));
-  assert.ok(!scripts.includes("content-message-meta.js"));
-  assert.ok(scripts.includes("content-message-meta-lite.js"));
-
-  for (const runtime of [
+  for (const legacy of [
+    "content-performance-guard.js",
+    "content-zh-CN-performance-fix.js",
+    "content-zh-CN.js",
+    "content-message-meta.js",
     "content-chat-exporter.js",
-    "content-chat-organizer.js",
     "content-temp-chat.js",
-    "content-message-meta-lite.js",
     "content-prompt-enhancer.js",
     "content-split-view.js",
+  ]) {
+    assert.ok(!scripts.includes(legacy), `${legacy} must not be shipped`);
+  }
+
+  for (const runtime of [
+    "content-chat-exporter-lite.js",
+    "content-chat-organizer.js",
+    "content-temp-chat-lite.js",
+    "content-message-meta-lite.js",
+    "content-prompt-enhancer-lite.js",
+    "content-split-view-lite.js",
   ]) {
     assert.ok(scripts.includes(runtime), `${runtime} must be shipped`);
   }
@@ -34,55 +41,49 @@ test("message metadata never observes streaming DOM", async () => {
   const meta = await source("content-message-meta-lite.js");
   assert.match(meta, /requestIdleCallback/u);
   assert.match(meta, /backend-api\/conversation/u);
-  assert.match(meta, /function currentConversationPath\(/u);
-  assert.match(meta, /function upsertFooterTimestamp\(/u);
   assert.doesNotMatch(meta, /MutationObserver/u);
   assert.doesNotMatch(meta, /getBoundingClientRect/u);
   assert.doesNotMatch(meta, /getComputedStyle/u);
-  assert.doesNotMatch(meta, /querySelectorAll\("button/u);
+  assert.doesNotMatch(meta, /__reactFiber/u);
 });
 
-test("chat exporter scopes code and copy-button work to relevant added subtrees", async () => {
-  const exporter = await source("content-chat-exporter.js");
-  assert.match(exporter, /MUTATION_RELEVANT_SELECTOR/u);
-  assert.match(exporter, /function addCodeButtons\(root = document\)/u);
-  assert.match(exporter, /function addCopyTextButtons\(root = document\)/u);
-  assert.match(exporter, /function scheduleMutationWork\(root\)/u);
-  assert.doesNotMatch(exporter, /new MutationObserver\(scheduleMutation/u);
+test("chat exporter is fully on-demand", async () => {
+  const exporter = await source("content-chat-exporter-lite.js");
+  assert.doesNotMatch(exporter, /MutationObserver/u);
+  assert.doesNotMatch(exporter, /\.innerText/u);
+  assert.doesNotMatch(exporter, /getComputedStyle/u);
+  assert.doesNotMatch(exporter, /getBoundingClientRect/u);
+  assert.match(exporter, /function collectPlainText\(/u);
+  assert.match(exporter, /button\.addEventListener\("click"/u);
 });
 
-test("chat organizer observes the sidebar instead of rerendering on every page mutation", async () => {
+test("split view is event-driven until explicitly opened", async () => {
+  const split = await source("content-split-view-lite.js");
+  assert.doesNotMatch(split, /MutationObserver/u);
+  assert.match(split, /function openSplit\(/u);
+  assert.match(split, /window\.addEventListener\("pageshow"/u);
+  assert.match(split, /window\.addEventListener\("popstate"/u);
+});
+
+test("prompt enhancer does not watch document mutations", async () => {
+  const enhancer = await source("content-prompt-enhancer-lite.js");
+  assert.doesNotMatch(enhancer, /MutationObserver/u);
+  assert.match(enhancer, /GPTModsPromptCompiler/u);
+  assert.match(enhancer, /document\.addEventListener\("focusin"/u);
+});
+
+test("temporary chat uses finite checks instead of a document observer", async () => {
+  const temp = await source("content-temp-chat-lite.js");
+  assert.doesNotMatch(temp, /MutationObserver/u);
+  assert.doesNotMatch(temp, /\.innerText/u);
+  assert.match(temp, /\[0, 400, 1200, 2600\]/u);
+  assert.match(temp, /function scheduleFiniteChecks\(/u);
+});
+
+test("chat organizer confines active rendering to the sidebar", async () => {
   const organizer = await source("content-chat-organizer.js");
-  assert.match(organizer, /function findSidebarRoot\(\)/u);
-  assert.match(organizer, /function attachSidebar\(root\)/u);
   assert.match(organizer, /state\.sidebarObserver\.observe\(root/u);
-  assert.doesNotMatch(organizer, /state\.observer\.observe\(document\.documentElement/u);
-});
-
-test("split view ignores streaming message churn and its own style writes", async () => {
-  const split = await source("content-split-view.js");
-  assert.match(split, /HEADER_RELEVANT_SELECTOR/u);
-  assert.match(split, /function frameMutationTouchesNavigator\(/u);
-  assert.match(split, /function nodeTouchesHeaderControls\(/u);
-  assert.doesNotMatch(split, /const observer = new MutationObserver\(\(\) =>/u);
-  assert.match(split, /attributeFilter: \["class", "hidden", "aria-hidden"\]/u);
-  assert.doesNotMatch(split, /attributeFilter:\s*\[[^\]]*"style"/su);
-});
-
-test("prompt enhancer caches the composer and ignores unrelated streaming mutations", async () => {
-  const enhancer = await source("content-prompt-enhancer.js");
-  assert.match(enhancer, /COMPOSER_SELECTOR/u);
-  assert.match(enhancer, /function nodeTouchesComposer\(/u);
-  assert.match(enhancer, /state\.button\?\.isConnected && state\.composer\?\.isConnected/u);
-  assert.doesNotMatch(enhancer, /new MutationObserver\(scheduleRun\)/u);
-});
-
-test("temporary chat avoids whole-body text walking and opens transfer windows synchronously", async () => {
-  const temp = await source("content-temp-chat.js");
-  assert.doesNotMatch(temp, /createTreeWalker\(document\.body/u);
-  assert.match(temp, /function headerSearchRoots\(\)/u);
-  assert.match(temp, /const win = window\.open\("about:blank", "_blank"\)/u);
-  assert.match(temp, /function nodeTouchesTempUi\(/u);
+  assert.match(organizer, /if \(state\.sidebarRoot\?\.isConnected\) return/u);
 });
 
 test("production build derives top-level content scripts from manifest", async () => {
