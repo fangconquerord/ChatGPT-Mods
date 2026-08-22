@@ -102,9 +102,12 @@
     '[data-cgpt-prompt-enhancer-toast]'
   ].join(",");
 
+  const HOST_SELECTOR = '[data-cgpt-composer-files="1"]';
   const NATIVE_ATTACHMENT_TRAY_ATTR = "data-cgpt-native-attachment-tray";
+  const TRAY_SELECTOR = `[${NATIVE_ATTACHMENT_TRAY_ATTR}="1"]`;
   const ATTACHMENT_COMPAT_STYLE_ID = "cgpt-attachment-native-preview-style";
   const ATTACHMENT_LIMIT = 10;
+  const LABEL_SELECTOR = "[aria-label], [title]";
 
   function tr(value) {
     if (typeof value !== "string" || !value) return value;
@@ -120,6 +123,10 @@
     if (match) return `原聊天中包含图片 ${match[1]}`;
 
     return value;
+  }
+
+  function isElement(node) {
+    return Boolean(node && node.nodeType === Node.ELEMENT_NODE);
   }
 
   function isOwned(element) {
@@ -141,15 +148,13 @@
   }
 
   function translateElement(element) {
-    if (!(element instanceof Element)) return;
+    if (!isElement(element)) return;
 
     for (const attribute of ["title", "aria-label", "placeholder"]) {
       if (!element.hasAttribute(attribute)) continue;
       const current = element.getAttribute(attribute) || "";
       const translated = tr(current);
-      if (translated !== current) {
-        element.setAttribute(attribute, translated);
-      }
+      if (translated !== current) element.setAttribute(attribute, translated);
     }
 
     for (const node of element.childNodes) {
@@ -158,30 +163,26 @@
   }
 
   function translateOwnedTree(root) {
-    if (!(root instanceof Element)) return;
+    if (!isElement(root)) return;
     translateElement(root);
     root.querySelectorAll("*").forEach(translateElement);
   }
 
+  function normalizeLabelElement(element) {
+    if (!isElement(element)) return;
+
+    for (const attribute of ["aria-label", "title"]) {
+      const current = element.getAttribute(attribute) || "";
+      if (!current.includes("：")) continue;
+      if (!/^(?:移除|删除|刪除).+\.[a-zA-Z0-9]{1,6}$/u.test(current)) continue;
+      element.setAttribute(attribute, current.replace(/：/gu, ":"));
+    }
+  }
+
   function normalizeNativeAttachmentLabels(root) {
-    const nodes = [];
-
-    if (root instanceof Element && root.matches("[aria-label], [title]")) {
-      nodes.push(root);
-    }
-
-    if (root?.querySelectorAll) {
-      nodes.push(...root.querySelectorAll("[aria-label], [title]"));
-    }
-
-    for (const element of nodes) {
-      for (const attribute of ["aria-label", "title"]) {
-        const current = element.getAttribute(attribute) || "";
-        if (!current.includes("：")) continue;
-        if (!/^(?:移除|删除|刪除).+\.[a-zA-Z0-9]{1,6}$/u.test(current)) continue;
-        element.setAttribute(attribute, current.replace(/：/gu, ":"));
-      }
-    }
+    if (!root) return;
+    if (isElement(root) && root.matches?.(LABEL_SELECTOR)) normalizeLabelElement(root);
+    root.querySelectorAll?.(LABEL_SELECTOR).forEach(normalizeLabelElement);
   }
 
   function canonicalAttachmentName(value) {
@@ -196,22 +197,15 @@
     const style = document.createElement("style");
     style.id = ATTACHMENT_COMPAT_STYLE_ID;
     style.textContent = `
-      html .cgpt-composer-files-grid {
-        display: none !important;
-      }
-
-      html .cgpt-composer-files__overflow {
-        display: none !important;
-      }
+      html .cgpt-composer-files-grid { display: none !important; }
+      html .cgpt-composer-files__overflow { display: none !important; }
     `;
     document.documentElement.appendChild(style);
   }
 
   function collectCompatAttachmentNames(host) {
     const rawNames = [];
-    const items = Array.isArray(host?._cgptAttachmentItems)
-      ? host._cgptAttachmentItems
-      : [];
+    const items = Array.isArray(host?._cgptAttachmentItems) ? host._cgptAttachmentItems : [];
 
     for (const item of items) {
       if (item?.name) rawNames.push(item.name);
@@ -219,39 +213,104 @@
 
     if (!rawNames.length && host?.querySelectorAll) {
       host
-        .querySelectorAll(
-          ".cgpt-composer-file__name-copy, .cgpt-composer-files__overflow-name",
-        )
+        .querySelectorAll(".cgpt-composer-file__name-copy, .cgpt-composer-files__overflow-name")
         .forEach((element) => {
           const value = element.textContent?.trim();
           if (value) rawNames.push(value);
         });
     }
 
-    return Array.from(
-      new Set(rawNames.map(canonicalAttachmentName).filter(Boolean)),
-    );
+    return Array.from(new Set(rawNames.map(canonicalAttachmentName).filter(Boolean)));
   }
 
-  function refreshAttachmentCompat() {
-    ensureAttachmentCompatStyle();
-    normalizeNativeAttachmentLabels(document);
+  let attachmentHost = null;
+  let attachmentTray = null;
+  let attachmentHostObserver = null;
+  let attachmentTrayObserver = null;
+  let attachmentFrame = 0;
 
-    document
-      .querySelectorAll(`[${NATIVE_ATTACHMENT_TRAY_ATTR}="1"]`)
-      .forEach((element) => element.removeAttribute(NATIVE_ATTACHMENT_TRAY_ATTR));
+  function refreshAttachmentCount() {
+    if (!attachmentHost?.isConnected) return;
+    normalizeNativeAttachmentLabels(attachmentHost);
 
-    const host = document.querySelector('[data-cgpt-composer-files="1"]');
-    if (!host) return;
-
-    const names = collectCompatAttachmentNames(host);
-    if (!names.length) return;
-
-    const count = host.querySelector(".cgpt-composer-files__count");
+    const names = collectCompatAttachmentNames(attachmentHost);
+    const count = attachmentHost.querySelector(".cgpt-composer-files__count");
     if (!count) return;
 
     count.textContent = `${names.length}/${ATTACHMENT_LIMIT}`;
     count.classList.toggle("is-over-limit", names.length > ATTACHMENT_LIMIT);
+  }
+
+  function refreshAttachmentCompat() {
+    attachmentFrame = 0;
+    ensureAttachmentCompatStyle();
+    refreshAttachmentCount();
+    if (attachmentTray?.isConnected) normalizeNativeAttachmentLabels(attachmentTray);
+  }
+
+  function scheduleAttachmentCompat() {
+    if (attachmentFrame) return;
+    attachmentFrame = requestAnimationFrame(refreshAttachmentCompat);
+  }
+
+  function createAttachmentObserver(target) {
+    const observer = new MutationObserver((mutations) => {
+      for (const mutation of mutations) {
+        if (mutation.type === "attributes") {
+          normalizeLabelElement(mutation.target);
+          continue;
+        }
+        for (const node of mutation.addedNodes) {
+          if (isElement(node)) normalizeNativeAttachmentLabels(node);
+        }
+      }
+      scheduleAttachmentCompat();
+    });
+
+    observer.observe(target, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["aria-label", "title"]
+    });
+    return observer;
+  }
+
+  function attachAttachmentHost(host) {
+    if (!isElement(host)) return;
+    if (attachmentHost === host && host.isConnected) return;
+    attachmentHostObserver?.disconnect();
+    attachmentHost = host;
+    normalizeNativeAttachmentLabels(host);
+    refreshAttachmentCount();
+    attachmentHostObserver = createAttachmentObserver(host);
+  }
+
+  function attachAttachmentTray(tray) {
+    if (!isElement(tray)) return;
+    if (attachmentTray === tray && tray.isConnected) return;
+    attachmentTrayObserver?.disconnect();
+    attachmentTray = tray;
+    normalizeNativeAttachmentLabels(tray);
+    attachmentTrayObserver = createAttachmentObserver(tray);
+  }
+
+  function discoverAttachmentRoots(root) {
+    if (!root?.querySelector && root !== document) return;
+
+    if (!attachmentHost?.isConnected) {
+      const host = isElement(root) && root.matches?.(HOST_SELECTOR)
+        ? root
+        : root.querySelector?.(HOST_SELECTOR);
+      if (host) attachAttachmentHost(host);
+    }
+
+    if (!attachmentTray?.isConnected) {
+      const tray = isElement(root) && root.matches?.(TRAY_SELECTOR)
+        ? root
+        : root.querySelector?.(TRAY_SELECTOR);
+      if (tray) attachAttachmentTray(tray);
+    }
   }
 
   function localizeAddedNode(node) {
@@ -262,66 +321,54 @@
       return;
     }
 
-    if (!(node instanceof Element)) return;
+    if (!isElement(node)) return;
 
-    normalizeNativeAttachmentLabels(node);
+    if (node.matches(OWNED_SELECTOR)) translateOwnedTree(node);
+    else node.querySelectorAll(OWNED_SELECTOR).forEach(translateOwnedTree);
 
-    if (node.matches(OWNED_SELECTOR)) {
-      translateOwnedTree(node);
-      return;
-    }
-
-    node.querySelectorAll(OWNED_SELECTOR).forEach(translateOwnedTree);
+    discoverAttachmentRoots(node);
   }
 
   function initialLocalize() {
-    document.querySelectorAll(OWNED_SELECTOR).forEach(translateElement);
-    normalizeNativeAttachmentLabels(document);
+    document.querySelectorAll(OWNED_SELECTOR).forEach(translateOwnedTree);
+    discoverAttachmentRoots(document);
+    ensureAttachmentCompatStyle();
   }
 
   const pending = new Set();
-  let frame = 0;
-  let attachmentCompatFrame = 0;
+  let localizeFrame = 0;
 
   function flushPending() {
-    frame = 0;
+    localizeFrame = 0;
     const nodes = Array.from(pending);
     pending.clear();
     nodes.forEach(localizeAddedNode);
   }
 
-  function scheduleAttachmentCompat() {
-    if (attachmentCompatFrame) return;
-    attachmentCompatFrame = requestAnimationFrame(() => {
-      attachmentCompatFrame = 0;
-      refreshAttachmentCompat();
-    });
+  function queueAddedNode(node) {
+    if (!node) return;
+    pending.add(node);
+    if (!localizeFrame) localizeFrame = requestAnimationFrame(flushPending);
   }
 
   const observer = new MutationObserver((mutations) => {
     for (const mutation of mutations) {
-      for (const node of mutation.addedNodes) pending.add(node);
-    }
+      if (mutation.type === "attributes") {
+        if (isElement(mutation.target) && mutation.target.matches?.(TRAY_SELECTOR)) {
+          attachAttachmentTray(mutation.target);
+        }
+        continue;
+      }
 
-    if (!frame && pending.size) {
-      frame = requestAnimationFrame(flushPending);
+      for (const node of mutation.addedNodes) queueAddedNode(node);
     }
-  });
-
-  const attachmentCompatObserver = new MutationObserver(() => {
-    scheduleAttachmentCompat();
   });
 
   observer.observe(document.documentElement, {
     childList: true,
-    subtree: true
-  });
-
-  attachmentCompatObserver.observe(document.documentElement, {
-    childList: true,
     subtree: true,
     attributes: true,
-    attributeFilter: [NATIVE_ATTACHMENT_TRAY_ATTR, "aria-label", "title"]
+    attributeFilter: [NATIVE_ATTACHMENT_TRAY_ATTR]
   });
 
   initialLocalize();
@@ -329,7 +376,9 @@
 
   globalThis.__cgptModsZhCN__ = {
     observer,
-    attachmentCompatObserver,
+    get attachmentCompatObserver() {
+      return observer;
+    },
     refresh: initialLocalize,
     refreshAttachmentCompat,
     translate: tr
