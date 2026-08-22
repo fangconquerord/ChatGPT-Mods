@@ -12,6 +12,7 @@
   const NATIVE_ATTACHMENT_TRAY_ATTR = "data-cgpt-native-attachment-tray";
   const ATTACHMENT_LIMIT = 10;
   const TIMESTAMP_ATTR = "data-cgpt-ts-injected";
+  const MESSAGE_SELECTOR = "[data-message-author-role]";
   const PASSIVE = { passive: true };
 
   if (window !== window.top) return;
@@ -30,7 +31,11 @@
 
   const timeCache = new WeakMap();
   const nativeRemoveControlCache = new WeakMap();
-  let timer = 0;
+  const pendingMessages = new Set();
+  let flushTimer = 0;
+  let fullRefreshRequested = false;
+  let composerDirty = true;
+  let currentComposerForm = null;
   let conversationTimestampCache = {
     conversationId: null,
     stamps: null,
@@ -73,13 +78,8 @@
         pointer-events: none;
       }
 
-      .${TIME_ROW_CLASS}[data-cgpt-ts-align="user"] {
-        justify-content: flex-end;
-      }
-
-      .${TIME_ROW_CLASS}[data-cgpt-ts-align="assistant"] {
-        justify-content: flex-start;
-      }
+      .${TIME_ROW_CLASS}[data-cgpt-ts-align="user"] { justify-content: flex-end; }
+      .${TIME_ROW_CLASS}[data-cgpt-ts-align="assistant"] { justify-content: flex-start; }
 
       .${COMPOSER_FILES_CLASS} {
         box-sizing: border-box;
@@ -90,10 +90,7 @@
         font-family: inherit;
       }
 
-      .${COMPOSER_FILES_CLASS},
-      .${COMPOSER_FILES_CLASS} * {
-        box-sizing: border-box;
-      }
+      .${COMPOSER_FILES_CLASS}, .${COMPOSER_FILES_CLASS} * { box-sizing: border-box; }
 
       .cgpt-composer-files__header {
         display: flex;
@@ -296,9 +293,7 @@
       .cgpt-composer-file:hover .cgpt-composer-file__remove,
       .cgpt-composer-file:focus-within .cgpt-composer-file__remove,
       .cgpt-composer-files__overflow-file:hover .cgpt-composer-file__remove,
-      .cgpt-composer-file__remove:focus-visible {
-        opacity: 1;
-      }
+      .cgpt-composer-file__remove:focus-visible { opacity: 1; }
 
       .cgpt-composer-file__remove:hover,
       .cgpt-composer-file__remove:focus-visible {
@@ -315,9 +310,7 @@
         font-size: 14px;
       }
 
-      [${NATIVE_ATTACHMENT_TRAY_ATTR}="1"] {
-        display: none !important;
-      }
+      [${NATIVE_ATTACHMENT_TRAY_ATTR}="1"] { display: none !important; }
 
       @keyframes cgpt-composer-file-marquee {
         0%, 8% { transform: translateX(0); }
@@ -329,29 +322,14 @@
         .${COMPOSER_FILES_GRID_CLASS} {
           grid-template-columns: repeat(var(--cgpt-mobile-file-columns, 5), minmax(0, 1fr));
         }
-
-        .cgpt-composer-file {
-          height: 46px;
-          gap: 4px;
-          padding: 5px;
-          border-radius: 10px;
-        }
-
-        .cgpt-composer-file__icon {
-          width: 20px;
-          height: 24px;
-          border-radius: 6px 6px 7px 7px;
-          font-size: 7px;
-        }
-
+        .cgpt-composer-file { height: 46px; gap: 4px; padding: 5px; border-radius: 10px; }
+        .cgpt-composer-file__icon { width: 20px; height: 24px; border-radius: 6px 6px 7px 7px; font-size: 7px; }
         .cgpt-composer-file__name-copy { font-size: 10px; }
         .cgpt-composer-file__type { font-size: 8px; }
       }
 
       @media (prefers-reduced-motion: reduce) {
-        .cgpt-composer-file__name-track.is-overflowing {
-          animation: none;
-        }
+        .cgpt-composer-file__name-track.is-overflowing { animation: none; }
       }
     `;
 
@@ -364,19 +342,15 @@
 
   function getReactProps(el) {
     if (!el || typeof el !== "object") return null;
-
     for (const key in el) {
       if (key.startsWith("__reactProps$") || key.startsWith("__reactFiber$")) {
         try {
           const value = el[key];
-          if (key.startsWith("__reactFiber$") && value?.memoizedProps) {
-            return value.memoizedProps;
-          }
+          if (key.startsWith("__reactFiber$") && value?.memoizedProps) return value.memoizedProps;
           if (value) return value;
         } catch (_error) {}
       }
     }
-
     return null;
   }
 
@@ -390,179 +364,114 @@
 
   function maybeDate(value) {
     if (value instanceof Date && !Number.isNaN(value.getTime())) return value;
-
     if (typeof value === "number" && Number.isFinite(value)) {
       if (value > 1e12) return new Date(value);
       if (value > 1e9) return new Date(value * 1000);
     }
-
     if (typeof value === "string") {
       const text = value.trim();
       if (!text) return null;
       if (/^\d{10}(\.\d+)?$/.test(text)) return new Date(Number(text) * 1000);
       if (/^\d{13}$/.test(text)) return new Date(Number(text));
-      if (
-        /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(text) ||
-        /^\d{4}-\d{2}-\d{2} /.test(text)
-      ) {
+      if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(text) || /^\d{4}-\d{2}-\d{2} /.test(text)) {
         const date = new Date(text);
         if (!Number.isNaN(date.getTime())) return date;
       }
     }
-
     return null;
   }
 
   function findTimestampInObject(obj, depth = 0, seen = new WeakSet()) {
-    if (!obj || depth > 5 || typeof obj !== "object" || seen.has(obj)) {
-      return null;
-    }
-
+    if (!obj || depth > 4 || typeof obj !== "object" || seen.has(obj)) return null;
     seen.add(obj);
-
-    for (const key of [
-      "create_time",
-      "createTime",
-      "timestamp",
-      "time",
-      "updated_at",
-      "update_time",
-    ]) {
+    for (const key of ["create_time", "createTime", "timestamp", "time", "updated_at", "update_time"]) {
       if (!(key in obj)) continue;
       const date = maybeDate(obj[key]);
-      if (date && !Number.isNaN(date.getTime()) && date.getFullYear() >= 2020) {
-        return date;
-      }
+      if (date && !Number.isNaN(date.getTime()) && date.getFullYear() >= 2020) return date;
     }
-
     for (const [key, value] of Object.entries(obj)) {
       if (typeof value === "function") continue;
-
       if (typeof value === "string" || typeof value === "number") {
         if (/time|date|created|updated/i.test(key)) {
           const date = maybeDate(value);
-          if (date && !Number.isNaN(date.getTime()) && date.getFullYear() >= 2020) {
-            return date;
-          }
+          if (date && !Number.isNaN(date.getTime()) && date.getFullYear() >= 2020) return date;
         }
         continue;
       }
-
-      const nestedDate = maybeDate(value);
-      if (
-        nestedDate &&
-        !Number.isNaN(nestedDate.getTime()) &&
-        nestedDate.getFullYear() >= 2020
-      ) {
-        return nestedDate;
-      }
-
       if (value && typeof value === "object") {
         const nested = findTimestampInObject(value, depth + 1, seen);
         if (nested) return nested;
       }
     }
-
     return null;
   }
 
   function formatTimestamp(date) {
     if (!date || Number.isNaN(date.getTime())) return "";
-
     const now = new Date();
     const sameDay = date.toDateString() === now.toDateString();
     const yesterday = new Date(now);
     yesterday.setDate(now.getDate() - 1);
     const isYesterday = date.toDateString() === yesterday.toDateString();
-
-    const time = new Intl.DateTimeFormat("ru-RU", {
-      hour: "2-digit",
-      minute: "2-digit",
-    }).format(date);
-
-    if (sameDay) return `сегодня, ${time}`;
-    if (isYesterday) return `вчера, ${time}`;
-
-    return new Intl.DateTimeFormat("ru-RU", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
+    const time = new Intl.DateTimeFormat("zh-CN", { hour: "2-digit", minute: "2-digit" }).format(date);
+    if (sameDay) return `今天 ${time}`;
+    if (isYesterday) return `昨天 ${time}`;
+    return new Intl.DateTimeFormat("zh-CN", {
+      year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit",
     }).format(date);
   }
 
-  async function fetchConversationTimestamps() {
+  function currentConversationPath(data) {
+    const mapping = data?.mapping || {};
+    const path = [];
+    let nodeId = data?.current_node;
+    while (nodeId && mapping[nodeId]) {
+      path.push(mapping[nodeId]);
+      nodeId = mapping[nodeId]?.parent;
+    }
+    return path.length
+      ? path.reverse()
+      : Object.values(mapping).sort((a, b) => (a?.message?.create_time || 0) - (b?.message?.create_time || 0));
+  }
+
+  async function fetchConversationTimestamps(force = false) {
     const conversationId = getConversationIdFromLocation();
     if (!conversationId) return null;
-
-    if (
-      conversationTimestampCache.conversationId === conversationId &&
-      Array.isArray(conversationTimestampCache.stamps)
-    ) {
+    if (!force && conversationTimestampCache.conversationId === conversationId && Array.isArray(conversationTimestampCache.stamps)) {
       return conversationTimestampCache.stamps;
     }
-
-    if (
-      conversationTimestampCache.conversationId === conversationId &&
-      conversationTimestampCache.promise
-    ) {
+    if (!force && conversationTimestampCache.conversationId === conversationId && conversationTimestampCache.promise) {
       return conversationTimestampCache.promise;
     }
 
-    const promise = fetch(`/backend-api/conversation/${conversationId}`, {
+    const promise = fetch(`/backend-api/conversation/${encodeURIComponent(conversationId)}`, {
       credentials: "include",
       headers: { accept: "application/json" },
     })
       .then((response) => (response.ok ? response.json() : null))
       .then((data) => {
-        const mapping = data?.mapping || {};
-        const stamps = Object.values(mapping)
+        const stamps = currentConversationPath(data)
           .map((node) => {
             const message = node?.message;
             const role = message?.author?.role || node?.author?.role || null;
-            const date = maybeDate(
-              message?.create_time || node?.create_time || message?.update_time,
-            );
-
-            return role && date ? { role, date } : null;
+            const date = maybeDate(message?.create_time || node?.create_time || message?.update_time);
+            return role && date ? { role, text: formatTimestamp(date) } : null;
           })
-          .filter(Boolean)
-          .sort((a, b) => a.date - b.date)
-          .map((entry) => ({
-            role: entry.role,
-            text: formatTimestamp(entry.date),
-          }));
-
-        conversationTimestampCache = {
-          conversationId,
-          stamps,
-          promise: null,
-        };
-
+          .filter((entry) => entry && (entry.role === "user" || entry.role === "assistant"));
+        conversationTimestampCache = { conversationId, stamps, promise: null };
         return stamps;
       })
       .catch(() => {
-        conversationTimestampCache = {
-          conversationId,
-          stamps: null,
-          promise: null,
-        };
+        conversationTimestampCache = { conversationId, stamps: null, promise: null };
         return null;
       });
 
-    conversationTimestampCache = {
-      conversationId,
-      stamps: null,
-      promise,
-    };
-
+    conversationTimestampCache = { conversationId, stamps: null, promise };
     return promise;
   }
 
   function extractTimestampForMessage(messageEl) {
     if (!messageEl) return "";
-
     const cached = timeCache.get(messageEl);
     if (cached) return cached;
 
@@ -571,13 +480,12 @@
       messageEl,
       messageEl.parentElement,
       messageEl.closest("[data-testid], article, section, li, div"),
-      ...Array.from(messageEl.querySelectorAll("*")).slice(0, 120),
+      ...Array.from(messageEl.querySelectorAll("*")).slice(0, 24),
     ].filter(Boolean);
 
     for (const node of candidates) {
       const props = getReactProps(node);
       if (!props) continue;
-
       const date = findTimestampInObject(props);
       if (date) {
         found = date;
@@ -586,11 +494,8 @@
     }
 
     if (!found) {
-      const timeEl =
-        messageEl.querySelector("time[datetime], [datetime]") ||
-        messageEl.parentElement?.querySelector?.("time[datetime], [datetime]");
-      const raw = timeEl?.getAttribute("datetime") || timeEl?.textContent || "";
-      found = maybeDate(raw);
+      const timeEl = messageEl.querySelector("time[datetime], [datetime]") || messageEl.parentElement?.querySelector?.("time[datetime], [datetime]");
+      found = maybeDate(timeEl?.getAttribute("datetime") || timeEl?.textContent || "");
     }
 
     const formatted = found ? formatTimestamp(found) : "";
@@ -599,125 +504,59 @@
   }
 
   function getMessageScope(messageEl) {
-    return (
-      messageEl.closest('[data-testid*="conversation-turn" i]') ||
+    return messageEl.closest('[data-testid*="conversation-turn" i]') ||
       messageEl.closest('[data-testid*="turn" i]') ||
       messageEl.closest("article") ||
       messageEl.closest("section") ||
       messageEl.closest("li") ||
       messageEl.parentElement ||
-      messageEl
-    );
+      messageEl;
+  }
+
+  function isVisibleElement(el) {
+    if (!el?.isConnected) return false;
+    const isManagedNativeAttachment = Boolean(el.closest?.(`[${NATIVE_ATTACHMENT_TRAY_ATTR}="1"]`));
+    const styles = window.getComputedStyle(el);
+    if (styles.display === "none" || styles.visibility === "hidden") return isManagedNativeAttachment;
+    const rect = el.getBoundingClientRect();
+    return (rect.width > 0 && rect.height > 0) || isManagedNativeAttachment;
   }
 
   function isMenuLikeButton(button) {
     if (!button || !isVisibleElement(button)) return false;
-
-    const label = normalizeText(
-      button.getAttribute("aria-label") ||
-        button.getAttribute("title") ||
-        button.innerText ||
-        button.textContent ||
-        "",
-    );
-
+    const label = normalizeText(button.getAttribute("aria-label") || button.getAttribute("title") || button.innerText || button.textContent || "");
     if (button.getAttribute("aria-haspopup") === "menu") return true;
-    if (/more|menu|options|actions|details|ещ[её]|меню|действ/iu.test(label)) {
-      return true;
-    }
-
-    return false;
-  }
-
-  function getActionSearchRoots(messageEl) {
-    const scope = getMessageScope(messageEl);
-    return Array.from(
-      new Set(
-        [
-          messageEl,
-          messageEl.parentElement,
-          scope,
-          scope?.parentElement,
-          scope?.nextElementSibling,
-        ].filter(Boolean),
-      ),
-    );
+    return /more|menu|options|actions|details|更多|菜单|操作|ещ[её]|меню|действ/iu.test(label);
   }
 
   function findButtonRow(button, boundary) {
     let row = button?.parentElement || null;
-
     while (row) {
       const styles = window.getComputedStyle(row);
       const buttonCount = row.querySelectorAll("button").length;
-      if (
-        styles.display === "flex" ||
-        styles.display === "inline-flex" ||
-        styles.display === "grid" ||
-        buttonCount > 1
-      ) {
-        return row;
-      }
-
+      if (styles.display === "flex" || styles.display === "inline-flex" || styles.display === "grid" || buttonCount > 1) return row;
       if (row === boundary) break;
       row = row.parentElement;
     }
-
     return button?.parentElement || null;
   }
 
   function findActionPlacement(messageEl) {
     const scope = getMessageScope(messageEl);
-    const scopeRect = scope.getBoundingClientRect();
-    const buttons = [];
-
-    getActionSearchRoots(messageEl).forEach((root) => {
-      root.querySelectorAll("button").forEach((button) => {
-        if (!isVisibleElement(button) || buttons.includes(button)) return;
-
-        const rect = button.getBoundingClientRect();
-        const verticallyNear =
-          rect.bottom >= scopeRect.top - 16 && rect.top <= scopeRect.bottom + 56;
-        const horizontallyNear =
-          rect.left <= scopeRect.right + 56 && rect.right >= scopeRect.left - 56;
-
-        if (verticallyNear && horizontallyNear) {
-          buttons.push(button);
-        }
-      });
-    });
-
+    const buttons = Array.from(scope.querySelectorAll("button")).filter(isVisibleElement);
+    if (!buttons.length && scope.parentElement) {
+      buttons.push(...Array.from(scope.parentElement.querySelectorAll(":scope > button, :scope > div > button")).filter(isVisibleElement));
+    }
     if (!buttons.length) return { row: null, anchor: null };
-
-    buttons.sort((a, b) => {
-      const aRect = a.getBoundingClientRect();
-      const bRect = b.getBoundingClientRect();
-      return aRect.top - bRect.top || aRect.left - bRect.left;
-    });
-
-    const menuButton = buttons.find(isMenuLikeButton) || buttons[buttons.length - 1];
-    return { row: findButtonRow(menuButton, scope), anchor: menuButton };
+    const anchor = buttons.find(isMenuLikeButton) || buttons[buttons.length - 1];
+    return { row: findButtonRow(anchor, scope), anchor };
   }
 
   function canUseInlinePlacement(row, anchor) {
     if (!row || !anchor || anchor.parentNode !== row) return false;
-
-    let current = row;
-    for (let depth = 0; current && depth < 5; depth += 1) {
-      const styles = window.getComputedStyle(current);
-      if (styles.display === "none" || styles.visibility === "hidden") {
-        return false;
-      }
-
-      const opacity = Number.parseFloat(styles.opacity || "1");
-      if (Number.isFinite(opacity) && opacity < 0.35) {
-        return false;
-      }
-
-      current = current.parentElement;
-    }
-
-    return true;
+    const styles = window.getComputedStyle(row);
+    const opacity = Number.parseFloat(styles.opacity || "1");
+    return styles.display !== "none" && styles.visibility !== "hidden" && (!Number.isFinite(opacity) || opacity >= 0.35);
   }
 
   function upsertFooterTimestamp(scope, role, timeEl) {
@@ -728,28 +567,19 @@
       footer.setAttribute("data-cgpt-ts-row", "1");
       scope.appendChild(footer);
     }
-
-    footer.setAttribute(
-      "data-cgpt-ts-align",
-      role === "user" ? "user" : "assistant",
-    );
+    footer.setAttribute("data-cgpt-ts-align", role === "user" ? "user" : "assistant");
     footer.replaceChildren(timeEl);
   }
 
   function upsertTimestamp(messageEl, role, text) {
     const scope = getMessageScope(messageEl);
-    let timeEl =
-      scope.querySelector(`[data-cgpt-ts="1"]`) ||
-      messageEl.querySelector(`[data-cgpt-ts="1"]`);
-
+    let timeEl = scope.querySelector(`[data-cgpt-ts="1"]`) || messageEl.querySelector(`[data-cgpt-ts="1"]`);
     if (!timeEl) {
       timeEl = document.createElement("div");
       timeEl.className = TIME_CLASS;
       timeEl.setAttribute("data-cgpt-ts", "1");
     }
-
     timeEl.textContent = text;
-
     const { row, anchor } = findActionPlacement(messageEl);
     if (canUseInlinePlacement(row, anchor)) {
       scope.querySelector(`[data-cgpt-ts-row="1"]`)?.remove();
@@ -761,113 +591,64 @@
       timeEl.style.textAlign = role === "user" ? "right" : "left";
       upsertFooterTimestamp(scope, role, timeEl);
     }
-
     messageEl.setAttribute(TIMESTAMP_ATTR, "1");
     scope.setAttribute(TIMESTAMP_ATTR, "1");
     timeCache.set(messageEl, text);
   }
 
-  async function injectTimestamps() {
-    const messageEls = Array.from(
-      document.querySelectorAll("[data-message-author-role]"),
-    );
+  async function applyFallbackTimestamps(force = false) {
+    const messageEls = Array.from(document.querySelectorAll(MESSAGE_SELECTOR));
     if (!messageEls.length) return;
-
-    const missing = [];
-
-    messageEls.forEach((messageEl) => {
-      const existingText = normalizeText(
-        messageEl.querySelector("[data-cgpt-ts='1']")?.textContent || "",
-      );
-      const text = existingText || extractTimestampForMessage(messageEl);
-      if (!text) {
-        missing.push(messageEl);
-        return;
-      }
-
-      upsertTimestamp(
-        messageEl,
-        messageEl.getAttribute("data-message-author-role") || "assistant",
-        text,
-      );
-    });
-
-    if (!missing.length) return;
-
-    const fallbackStamps = await fetchConversationTimestamps();
-    if (!Array.isArray(fallbackStamps) || !fallbackStamps.length) return;
-
-    const orderedStamps = fallbackStamps.filter(
-      (entry) => entry.role === "user" || entry.role === "assistant",
-    );
+    let stamps = await fetchConversationTimestamps(force);
+    if (!Array.isArray(stamps) || stamps.length < messageEls.length) {
+      await new Promise((resolve) => window.setTimeout(resolve, 500));
+      stamps = await fetchConversationTimestamps(true);
+    }
+    if (!Array.isArray(stamps) || !stamps.length) return;
 
     let stampIndex = 0;
-    missing.forEach((messageEl) => {
+    for (const messageEl of messageEls) {
       const role = messageEl.getAttribute("data-message-author-role") || "assistant";
-
-      while (
-        stampIndex < orderedStamps.length &&
-        orderedStamps[stampIndex].role !== role
-      ) {
-        stampIndex += 1;
-      }
-
-      const match = orderedStamps[stampIndex];
-      if (!match?.text) return;
-
-      upsertTimestamp(messageEl, role, match.text);
+      while (stampIndex < stamps.length && stamps[stampIndex].role !== role) stampIndex += 1;
+      const match = stamps[stampIndex];
+      if (!match?.text) continue;
+      if (!timeCache.get(messageEl)) upsertTimestamp(messageEl, role, match.text);
       stampIndex += 1;
-    });
+    }
   }
 
-  function isVisibleElement(el) {
-    if (!el?.isConnected) return false;
-    const isManagedNativeAttachment = Boolean(
-      el.closest?.(`[${NATIVE_ATTACHMENT_TRAY_ATTR}="1"]`),
-    );
-    const styles = window.getComputedStyle(el);
-    if (styles.display === "none" || styles.visibility === "hidden") {
-      return isManagedNativeAttachment;
+  async function injectTimestamps(messageEls) {
+    const candidates = Array.from(new Set(messageEls || [])).filter((messageEl) => messageEl?.isConnected);
+    if (!candidates.length) return;
+    let needsFallback = false;
+    for (const messageEl of candidates) {
+      const role = messageEl.getAttribute("data-message-author-role") || "assistant";
+      const existing = normalizeText(getMessageScope(messageEl).querySelector("[data-cgpt-ts='1']")?.textContent || "");
+      const text = existing || extractTimestampForMessage(messageEl);
+      if (text) upsertTimestamp(messageEl, role, text);
+      else needsFallback = true;
     }
-    const rect = el.getBoundingClientRect();
-    return (rect.width > 0 && rect.height > 0) || isManagedNativeAttachment;
+    if (needsFallback) void applyFallbackTimestamps(false);
   }
 
   function isDeleteLikeText(text) {
-    return /\b(delete|remove|\u0443\u0434\u0430\u043b\u0438\u0442\u044c)\b/iu.test(normalizeText(text));
+    return /\b(delete|remove)\b|删除|移除|\u0443\u0434\u0430\u043b\u0438\u0442\u044c/iu.test(normalizeText(text));
   }
 
   function extractFileNameFromText(text) {
     const normalized = normalizeText(text);
     if (!normalized) return null;
-
     const variants = [];
-
-    if (normalized.includes(":")) {
-      variants.push(normalized.slice(normalized.lastIndexOf(":") + 1).trim());
-    }
-
-    if (normalized.includes(" - ")) {
-      variants.push(normalized.slice(normalized.lastIndexOf(" - ") + 3).trim());
-    }
-
+    if (normalized.includes(":")) variants.push(normalized.slice(normalized.lastIndexOf(":") + 1).trim());
+    if (normalized.includes(" - ")) variants.push(normalized.slice(normalized.lastIndexOf(" - ") + 3).trim());
     variants.push(normalized);
-
     for (const variant of variants) {
       if (!variant) continue;
-
       const directMatch = variant.match(/^[^\\/:*?"<>|\n]+?\.[a-zA-Z0-9]{1,6}$/);
       if (directMatch) return directMatch[0].trim();
-
-      const fileMatches = Array.from(
-        variant.matchAll(/[^\\/:*?"<>|\n]+?\.[a-zA-Z0-9]{1,6}(?=$|\s|,|\))/g),
-      );
-
-      if (fileMatches.length) {
-        return fileMatches[fileMatches.length - 1][0].trim();
-      }
+      const fileMatches = Array.from(variant.matchAll(/[^\\/:*?"<>|\n]+?\.[a-zA-Z0-9]{1,6}(?=$|\s|,|\))/g));
+      if (fileMatches.length) return fileMatches[fileMatches.length - 1][0].trim();
     }
-
     return null;
   }
 
@@ -878,24 +659,19 @@
       const nested = root.querySelector("[contenteditable='true'], textarea");
       if (nested) return nested;
     }
-
-    return (
-      document.querySelector("textarea[placeholder]") ||
+    return document.querySelector("textarea[placeholder]") ||
       document.querySelector("[contenteditable='true'][role='textbox']") ||
       document.querySelector("[contenteditable='true'][data-lexical-editor='true']") ||
-      document.querySelector("div[contenteditable='true']")
-    );
+      document.querySelector("div[contenteditable='true']");
   }
 
   function locateComposerForm() {
-    const composer = resolveComposerElement();
-    return composer?.closest("form") || null;
+    return resolveComposerElement()?.closest("form") || null;
   }
 
   function extractSingleAttachmentName(el) {
     const ariaLabel = (el.getAttribute?.("aria-label") || "").trim();
     const title = (el.getAttribute?.("title") || "").trim();
-
     let directText = "";
     for (const child of el.childNodes || []) {
       if (child.nodeType === Node.TEXT_NODE) {
@@ -903,13 +679,10 @@
         if (directText) break;
       }
     }
-
     for (const source of [directText, title, ariaLabel, normalizeText(el.textContent || "")]) {
-      if (!source) continue;
       const name = extractFileNameFromText(source);
       if (name) return name;
     }
-
     return null;
   }
 
@@ -921,66 +694,39 @@
   }
 
   function isNativeRemoveControl(control) {
-    const label = [
-      control.getAttribute("aria-label"),
-      control.getAttribute("title"),
-      control.getAttribute("data-testid"),
-      control.textContent,
-    ].join(" ");
-    const hasExplicitRemoveIntent =
-      isDeleteLikeText(label) ||
-      /\b(close|clear)\b|\u0437\u0430\u043a\u0440\u044b\u0442\u044c|\u043e\u0447\u0438\u0441\u0442\u0438\u0442\u044c/iu.test(label) ||
+    const label = [control.getAttribute("aria-label"), control.getAttribute("title"), control.getAttribute("data-testid"), control.textContent].join(" ");
+    const hasExplicitRemoveIntent = isDeleteLikeText(label) ||
+      /\b(close|clear)\b|关闭|清除|\u0437\u0430\u043a\u0440\u044b\u0442\u044c|\u043e\u0447\u0438\u0441\u0442\u0438\u0442\u044c/iu.test(label) ||
       control.matches?.("[data-testid*='remove' i], [data-testid*='delete' i], [data-testid*='close' i]");
     if (hasExplicitRemoveIntent) return true;
-
-    if (
-      control.closest("a, [download]") ||
-      control.matches?.("[download], [data-testid*='download' i]")
-    ) {
-      return false;
-    }
-
+    if (control.closest("a, [download]") || control.matches?.("[download], [data-testid*='download' i]")) return false;
     const controlText = normalizeText(control.textContent || "");
     const rect = control.getBoundingClientRect?.();
-    const compactIcon =
-      rect &&
-      rect.width > 0 &&
-      rect.height > 0 &&
-      rect.width <= 44 &&
-      rect.height <= 44 &&
-      controlText.length <= 2 &&
-      (Boolean(control.querySelector("svg")) || /^(?:×|✕|✖|x)$/iu.test(controlText));
-    return compactIcon;
+    return Boolean(rect && rect.width > 0 && rect.height > 0 && rect.width <= 44 && rect.height <= 44 && controlText.length <= 2 && (control.querySelector("svg") || /^(?:×|✕|✖|x)$/iu.test(controlText)));
   }
 
   function findNativeRemoveControl(source, form) {
     const cachedControl = nativeRemoveControlCache.get(source);
     if (cachedControl?.isConnected) return cachedControl;
-
     let scope = source;
-
     for (let depth = 0; scope && scope !== form && depth < 7; depth += 1) {
-      const controls = getInteractiveControls(scope);
-      const removeControls = controls.filter(isNativeRemoveControl);
+      const removeControls = getInteractiveControls(scope).filter(isNativeRemoveControl);
       if (removeControls.length === 1) {
         nativeRemoveControlCache.set(source, removeControls[0]);
         return removeControls[0];
       }
       scope = scope.parentElement;
     }
-
     return null;
   }
 
   function findCommonAncestor(elements, boundary) {
     if (!elements.length) return null;
     let current = elements[0];
-
     while (current && current !== boundary) {
       if (elements.every((element) => current.contains(element))) return current;
       current = current.parentElement;
     }
-
     return null;
   }
 
@@ -993,82 +739,54 @@
   function findNativeAttachmentCard(form, item) {
     const composer = resolveComposerElement();
     let card = findCommonAncestor([item.source, item.removeControl], form);
-
     while (card && card !== form) {
       const removeControls = getInteractiveControls(card).filter(isNativeRemoveControl);
-      if (removeControls.length === 1 && !card.contains(composer)) {
-        return card;
-      }
+      if (removeControls.length === 1 && !card.contains(composer)) return card;
       card = card.parentElement;
     }
-
     return null;
   }
 
   function collectComposerAttachmentData() {
     const form = locateComposerForm();
     if (!form) return { form: null, items: [] };
-
     const itemsByName = new Map();
     const fileExtPattern = /\.[a-zA-Z0-9]{1,6}(\s|$)/;
     const candidates = new Set();
 
     form.querySelectorAll("[aria-label], [title]").forEach((el) => {
       const value = el.getAttribute("aria-label") || el.getAttribute("title") || "";
-      if (!isVisibleElement(el)) return;
-      if (isDeleteLikeText(value)) return;
+      if (!isVisibleElement(el) || isDeleteLikeText(value)) return;
       if (fileExtPattern.test(value)) candidates.add(el);
     });
 
-    form
-      .querySelectorAll('[data-testid*="attach" i], [class*="attach" i], [class*="file" i]')
-      .forEach((container) => {
-        container.querySelectorAll("span, p, div").forEach((el) => {
-          if (!isVisibleElement(el)) return;
-          const text = normalizeText(el.textContent || "");
-          if (isDeleteLikeText(text)) return;
-          if (fileExtPattern.test(text) && !text.includes("\n") && text.length < 200) {
-            candidates.add(el);
-          }
-        });
+    form.querySelectorAll('[data-testid*="attach" i], [class*="attach" i], [class*="file" i]').forEach((container) => {
+      container.querySelectorAll("span, p, div").forEach((el) => {
+        if (!isVisibleElement(el)) return;
+        const text = normalizeText(el.textContent || "");
+        if (!isDeleteLikeText(text) && fileExtPattern.test(text) && !text.includes("\n") && text.length < 200) candidates.add(el);
       });
+    });
 
     candidates.forEach((el) => {
       const name = extractSingleAttachmentName(el);
       if (!name) return;
-      const sourceText = normalizeText([
-        el.getAttribute?.("aria-label"),
-        el.getAttribute?.("title"),
-        el.textContent,
-      ].filter(Boolean).join(" "));
-      const candidate = {
-        name,
-        source: el,
-        removeControl: findNativeRemoveControl(el, form),
-        sourceTextLength: sourceText.length,
-      };
+      const sourceText = normalizeText([el.getAttribute?.("aria-label"), el.getAttribute?.("title"), el.textContent].filter(Boolean).join(" "));
+      const candidate = { name, source: el, removeControl: findNativeRemoveControl(el, form), sourceTextLength: sourceText.length };
       const current = itemsByName.get(name);
-      if (!current || candidate.sourceTextLength < current.sourceTextLength) {
-        itemsByName.set(name, candidate);
-      }
+      if (!current || candidate.sourceTextLength < current.sourceTextLength) itemsByName.set(name, candidate);
     });
 
-    return {
-      form,
-      items: Array.from(itemsByName.values()).map(({ sourceTextLength, ...item }) => item),
-    };
+    return { form, items: Array.from(itemsByName.values()).map(({ sourceTextLength, ...item }) => item) };
   }
 
   function describeFile(name) {
     const extension = (name.match(/\.([^.]+)$/u)?.[1] || "file").toLowerCase();
     const kinds = {
-      pdf: ["pdf"],
-      image: ["jpg", "jpeg", "png", "gif", "webp", "svg", "heic", "avif", "bmp"],
+      pdf: ["pdf"], image: ["jpg", "jpeg", "png", "gif", "webp", "svg", "heic", "avif", "bmp"],
       spreadsheet: ["xls", "xlsx", "csv", "tsv", "ods"],
       code: ["js", "mjs", "cjs", "ts", "tsx", "jsx", "py", "java", "c", "cpp", "cs", "go", "rs", "php", "rb", "html", "css", "json", "xml", "yaml", "yml", "sql", "sh"],
-      archive: ["zip", "rar", "7z", "tar", "gz"],
-      media: ["mp3", "wav", "m4a", "ogg", "mp4", "mov", "avi", "mkv", "webm"],
-      model: ["fbx", "obj", "blend", "stl", "glb", "gltf"],
+      archive: ["zip", "rar", "7z", "tar", "gz"], media: ["mp3", "wav", "m4a", "ogg", "mp4", "mov", "avi", "mkv", "webm"], model: ["fbx", "obj", "blend", "stl", "glb", "gltf"],
     };
     const kind = Object.entries(kinds).find(([, extensions]) => extensions.includes(extension))?.[0] || "document";
     const badge = extension.length <= 4 ? extension.toUpperCase() : kind === "spreadsheet" ? "XLS" : "FILE";
@@ -1077,19 +795,14 @@
 
   function removeAttachment(item) {
     const form = locateComposerForm();
-    const currentItem = form
-      ? collectComposerAttachmentData().items.find(({ name }) => name === item.name)
-      : null;
+    const currentItem = form ? collectComposerAttachmentData().items.find(({ name }) => name === item.name) : null;
     const source = currentItem?.source || item.source;
-    const removeControl =
-      (form && source?.isConnected && findNativeRemoveControl(source, form)) ||
-      (item.removeControl?.isConnected && isNativeRemoveControl(item.removeControl)
-        ? item.removeControl
-        : null);
-
+    const removeControl = (form && source?.isConnected && findNativeRemoveControl(source, form)) ||
+      (item.removeControl?.isConnected && isNativeRemoveControl(item.removeControl) ? item.removeControl : null);
     if (!removeControl) return;
     removeControl.click();
-    window.setTimeout(scheduleRun, 0);
+    composerDirty = true;
+    scheduleFlush();
   }
 
   function createRemoveButton(item) {
@@ -1097,8 +810,8 @@
     button.type = "button";
     button.className = "cgpt-composer-file__remove";
     button.textContent = "×";
-    button.title = `Удалить ${item.name}`;
-    button.setAttribute("aria-label", `Удалить ${item.name}`);
+    button.title = `删除 ${item.name}`;
+    button.setAttribute("aria-label", `删除 ${item.name}`);
     button.addEventListener("click", (event) => {
       event.preventDefault();
       event.stopPropagation();
@@ -1113,15 +826,12 @@
     card.className = "cgpt-composer-file";
     card.setAttribute("role", "listitem");
     card.title = `${item.name} · ${descriptor.type}`;
-
     const icon = document.createElement("span");
     icon.className = `cgpt-composer-file__icon is-${descriptor.kind}`;
     icon.textContent = descriptor.badge;
     icon.setAttribute("aria-hidden", "true");
-
     const body = document.createElement("div");
     body.className = "cgpt-composer-file__body";
-
     const viewport = document.createElement("div");
     viewport.className = "cgpt-composer-file__name-viewport";
     const track = document.createElement("span");
@@ -1131,15 +841,11 @@
     firstName.textContent = item.name;
     track.appendChild(firstName);
     viewport.appendChild(track);
-
     const type = document.createElement("span");
     type.className = "cgpt-composer-file__type";
     type.textContent = descriptor.type;
     body.append(viewport, type);
-    card.append(icon, body);
-
-    const removeButton = createRemoveButton(item);
-    if (removeButton) card.appendChild(removeButton);
+    card.append(icon, body, createRemoveButton(item));
     return card;
   }
 
@@ -1150,9 +856,7 @@
     const name = document.createElement("span");
     name.className = "cgpt-composer-files__overflow-name";
     name.textContent = item.name;
-    row.appendChild(name);
-    const removeButton = createRemoveButton(item);
-    if (removeButton) row.appendChild(removeButton);
+    row.append(name, createRemoveButton(item));
     return row;
   }
 
@@ -1165,28 +869,21 @@
         if (!viewport || !name) return;
         const nameWidth = Math.ceil(name.scrollWidth);
         const travelDistance = Math.ceil(nameWidth - viewport.clientWidth);
-        const isOverflowing = travelDistance > 2;
-        if (!isOverflowing) {
+        if (travelDistance <= 2) {
           track.classList.remove("is-overflowing");
           track.style.removeProperty("--cgpt-marquee-offset");
           track.style.removeProperty("--cgpt-marquee-duration");
           return;
         }
-
         track.style.setProperty("--cgpt-marquee-offset", `-${travelDistance}px`);
-        track.style.setProperty(
-          "--cgpt-marquee-duration",
-          `${Math.max(8, travelDistance / 8).toFixed(2)}s`,
-        );
+        track.style.setProperty("--cgpt-marquee-duration", `${Math.max(8, travelDistance / 8).toFixed(2)}s`);
         track.classList.add("is-overflowing");
       });
     });
   }
 
   function restoreNativeAttachmentTrays(form) {
-    form.querySelectorAll(`[${NATIVE_ATTACHMENT_TRAY_ATTR}="1"]`).forEach((tray) => {
-      tray.removeAttribute(NATIVE_ATTACHMENT_TRAY_ATTR);
-    });
+    form.querySelectorAll(`[${NATIVE_ATTACHMENT_TRAY_ATTR}="1"]`).forEach((tray) => tray.removeAttribute(NATIVE_ATTACHMENT_TRAY_ATTR));
   }
 
   function hideNativeAttachmentTray(form, items) {
@@ -1194,22 +891,14 @@
       restoreNativeAttachmentTrays(form);
       return;
     }
-
     const tray = findNativeAttachmentTray(form, items.map((item) => item.source));
     if (tray) {
-      if (tray.getAttribute(NATIVE_ATTACHMENT_TRAY_ATTR) !== "1") {
-        tray.setAttribute(NATIVE_ATTACHMENT_TRAY_ATTR, "1");
-      }
+      tray.setAttribute(NATIVE_ATTACHMENT_TRAY_ATTR, "1");
       return;
     }
-
     const cards = items.map((item) => findNativeAttachmentCard(form, item));
     if (cards.some((card) => !card)) return;
-    cards.forEach((card) => {
-      if (card.getAttribute(NATIVE_ATTACHMENT_TRAY_ATTR) !== "1") {
-        card.setAttribute(NATIVE_ATTACHMENT_TRAY_ATTR, "1");
-      }
-    });
+    cards.forEach((card) => card.setAttribute(NATIVE_ATTACHMENT_TRAY_ATTR, "1"));
   }
 
   function getComposerFilesHost(form) {
@@ -1217,7 +906,7 @@
     if (!host) {
       host = document.createElement("section");
       host.setAttribute(COMPOSER_MARK_ATTR, "1");
-      host.setAttribute("aria-label", "Прикреплённые файлы");
+      host.setAttribute("aria-label", "已附加文件");
     }
     if (host.nextElementSibling !== form) form.before(host);
     host.className = COMPOSER_FILES_CLASS;
@@ -1225,19 +914,13 @@
   }
 
   function hasSameAttachmentItems(previousItems, nextItems) {
-    return Boolean(
-      previousItems &&
-      previousItems.length === nextItems.length &&
-      previousItems.every(
-        (item, index) => item.name === nextItems[index].name,
-      ),
-    );
+    return Boolean(previousItems && previousItems.length === nextItems.length && previousItems.every((item, index) => item.name === nextItems[index].name));
   }
 
   function updateComposerAttachmentInfo() {
     const { form, items } = collectComposerAttachmentData();
+    currentComposerForm = form;
     if (!form) return;
-
     if (!items.length) {
       restoreNativeAttachmentTrays(form);
       document.querySelector(`[${COMPOSER_MARK_ATTR}="1"]`)?.remove();
@@ -1266,10 +949,10 @@
     if (overLimitItems.length) {
       const overflow = document.createElement("div");
       overflow.className = "cgpt-composer-files__overflow";
-      overflow.setAttribute("aria-label", "Файлы сверх лимита");
+      overflow.setAttribute("aria-label", "超出上限的文件");
       const label = document.createElement("span");
       label.className = "cgpt-composer-files__overflow-label";
-      label.textContent = "Сверх лимита:";
+      label.textContent = "超出上限：";
       overflow.appendChild(label);
       overLimitItems.forEach((item) => overflow.appendChild(createOverflowFile(item)));
       header.appendChild(overflow);
@@ -1278,14 +961,8 @@
     const grid = document.createElement("div");
     grid.className = COMPOSER_FILES_GRID_CLASS;
     grid.setAttribute("role", "list");
-    grid.style.setProperty(
-      "--cgpt-file-columns",
-      String(Math.max(1, Math.min(5, visibleItems.length))),
-    );
-    grid.style.setProperty(
-      "--cgpt-mobile-file-columns",
-      String(Math.max(1, Math.min(5, visibleItems.length))),
-    );
+    grid.style.setProperty("--cgpt-file-columns", String(Math.max(1, Math.min(5, visibleItems.length))));
+    grid.style.setProperty("--cgpt-mobile-file-columns", String(Math.max(1, Math.min(5, visibleItems.length))));
     visibleItems.forEach((item) => grid.appendChild(createFileCard(item)));
     host.replaceChildren(header, ...(visibleItems.length ? [grid] : []));
     host._cgptAttachmentItems = items;
@@ -1293,36 +970,93 @@
     enableOverflowMarquees(host);
   }
 
-  function run() {
+  function collectMessagesFromNode(node) {
+    if (!node) return;
+    if (node.nodeType === Node.ELEMENT_NODE) {
+      if (node.matches?.(MESSAGE_SELECTOR)) pendingMessages.add(node);
+      node.querySelectorAll?.(MESSAGE_SELECTOR).forEach((message) => pendingMessages.add(message));
+      const ancestor = node.closest?.(MESSAGE_SELECTOR);
+      if (ancestor && (node.matches?.("button, [role='button']") || node.querySelector?.("button, [role='button']"))) {
+        pendingMessages.add(ancestor);
+      }
+    }
+  }
+
+  function mutationTouchesComposer(mutation) {
+    const form = currentComposerForm || locateComposerForm();
+    if (form && (form === mutation.target || form.contains(mutation.target))) return true;
+    for (const node of mutation.addedNodes || []) {
+      if (node.nodeType !== Node.ELEMENT_NODE) continue;
+      if (node.matches?.("#prompt-textarea, form") || node.querySelector?.("#prompt-textarea")) return true;
+    }
+    return false;
+  }
+
+  async function flush() {
+    flushTimer = 0;
     ensureStyle();
-    void injectTimestamps();
-    updateComposerAttachmentInfo();
+
+    if (fullRefreshRequested) {
+      fullRefreshRequested = false;
+      document.querySelectorAll(MESSAGE_SELECTOR).forEach((message) => pendingMessages.add(message));
+      composerDirty = true;
+    }
+
+    const messages = Array.from(pendingMessages);
+    pendingMessages.clear();
+    if (messages.length) await injectTimestamps(messages);
+
+    if (composerDirty) {
+      composerDirty = false;
+      updateComposerAttachmentInfo();
+    }
+  }
+
+  function scheduleFlush() {
+    if (flushTimer) return;
+    flushTimer = window.setTimeout(() => {
+      void flush();
+    }, 120);
   }
 
   function scheduleRun() {
-    if (timer) return;
-    timer = window.setTimeout(() => {
-      timer = 0;
-      run();
-    }, 250);
+    fullRefreshRequested = true;
+    scheduleFlush();
   }
 
-  const observer = new MutationObserver(scheduleRun);
+  const observer = new MutationObserver((mutations) => {
+    let shouldFlush = false;
+    for (const mutation of mutations) {
+      if (mutationTouchesComposer(mutation)) {
+        composerDirty = true;
+        shouldFlush = true;
+      }
+      for (const node of mutation.addedNodes || []) {
+        const before = pendingMessages.size;
+        collectMessagesFromNode(node);
+        if (pendingMessages.size !== before) shouldFlush = true;
+      }
+    }
+    if (shouldFlush) scheduleFlush();
+  });
+
   const start = () => {
-    run();
-    observer.observe(document.documentElement, {
-      childList: true,
-      subtree: true,
-    });
+    ensureStyle();
+    scheduleRun();
+    observer.observe(document.documentElement, { childList: true, subtree: true });
   };
 
-  globalThis[BOOT_KEY] = {
-    scheduleRun,
-  };
+  globalThis[BOOT_KEY] = { scheduleRun };
 
   window.addEventListener("pageshow", scheduleRun, PASSIVE);
-  window.addEventListener("popstate", scheduleRun, PASSIVE);
-  window.addEventListener("resize", scheduleRun, PASSIVE);
+  window.addEventListener("popstate", () => {
+    conversationTimestampCache = { conversationId: null, stamps: null, promise: null };
+    scheduleRun();
+  }, PASSIVE);
+  window.addEventListener("resize", () => {
+    document.querySelectorAll(`${MESSAGE_SELECTOR}[${TIMESTAMP_ATTR}="1"]`).forEach((message) => pendingMessages.add(message));
+    scheduleFlush();
+  }, PASSIVE);
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", start, { once: true });
