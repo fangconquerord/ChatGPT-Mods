@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "ChatGPT Mods 中文版",
-  "version": "1.2.1.6",
-  "version_name": "1.2.1-cn.6",
+  "version": "1.2.1.7",
+  "version_name": "1.2.1-cn.7",
   "description": "为 chatgpt.com 提供分屏、聊天导出、临时聊天保存、文件夹整理和本地提示词优化等界面增强。",
   "host_permissions": [
     "https://chatgpt.com/*"
@@ -39,7 +39,7 @@
       ],
       "js": [
         "content-settings.js",
-        "content-chat-exporter.js",
+        "content-chat-exporter-lite.js",
         "content-chat-organizer.js",
         "prompt-compiler/namespace.js",
         "prompt-compiler/types.js",
@@ -62,10 +62,10 @@
         "prompt-compiler/rules-loader.js",
         "prompt-compiler/pipeline.js",
         "prompt-compiler/index.js",
-        "content-temp-chat.js",
+        "content-temp-chat-lite.js",
         "content-message-meta-lite.js",
-        "content-prompt-enhancer.js",
-        "content-split-view.js"
+        "content-prompt-enhancer-lite.js",
+        "content-split-view-lite.js"
       ],
       "run_at": "document_idle",
       "all_frames": false
