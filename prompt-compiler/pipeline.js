@@ -92,6 +92,7 @@
       result.metrics.improvedLength = normalizedText.length;
       result.metrics.growthRatio = Number((normalizedText.length / Math.max(1, originalText.length)).toFixed(3));
       result.changed = normalizedText !== originalText;
+      result.action = result.changed ? "rewritten" : "unchanged";
       result.improvedText = normalizedText;
       result.appliedRuleIds = [`bypass.${bypassReason}`];
       return result;
