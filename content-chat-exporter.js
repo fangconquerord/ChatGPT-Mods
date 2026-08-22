@@ -11,9 +11,17 @@
   const SNIPPET_ATTR = "data-cgpt-chat-export-snippet";
   const DOWNLOAD_MESSAGE = "cgpt-download-chat-export";
   const PASSIVE = { passive: true };
-  const COPY_LABEL_PATTERN = /\bcopy\b|копир(?:овать|овать текст|овать код)/iu;
-  const ACTION_LABEL_PATTERN = /\b(?:copy|edit|regenerate|share|like|dislike|read aloud|more|branch)\b|(?:копир|редакт|повтор|подел|оцен|озвуч|ещ[её]|ветв)/iu;
-  const HEADER_ACTION_LABEL_PATTERN = /\b(?:share|more|menu|options)\b|(?:подел|ещ[её]|меню|действ)/iu;
+  const COPY_LABEL_PATTERN = /\bcopy\b|复制|копир(?:овать|овать текст|овать код)/iu;
+  const ACTION_LABEL_PATTERN = /\b(?:copy|edit|regenerate|share|like|dislike|read aloud|more|branch)\b|(?:复制|编辑|重新生成|分享|赞|踩|朗读|更多|分支)|(?:копир|редакт|повтор|подел|оцен|озвуч|ещ[её]|ветв)/iu;
+  const HEADER_ACTION_LABEL_PATTERN = /\b(?:share|more|menu|options)\b|(?:分享|更多|菜单|选项)|(?:подел|ещ[её]|меню|действ)/iu;
+  const MUTATION_RELEVANT_SELECTOR = [
+    "pre",
+    "button",
+    "header",
+    '[role="button"]',
+    '[data-message-author-role]',
+    '[data-testid*="conversation-turn" i]'
+  ].join(",");
 
   if (window !== window.top) return;
 
@@ -36,6 +44,7 @@
     activeScope: null,
     menuAnchor: null,
     exporting: false,
+    pendingRoots: new Set(),
   };
 
   function ensureStyle() {
@@ -249,9 +258,9 @@
       ? node
       : node?.querySelector?.("[data-message-author-role]");
     const role = String(roleNode?.getAttribute("data-message-author-role") || "").toLowerCase();
-    if (role === "user") return "Пользователь";
+    if (role === "user") return "用户";
     if (role === "assistant") return "ChatGPT";
-    return "Фрагмент";
+    return "片段";
   }
 
   function getRoleKey(node) {
@@ -267,15 +276,12 @@
       if (scope.matches?.("pre")) return [scope];
       return [getMessageScope(scope)].filter(Boolean);
     }
-
     const roleNodes = Array.from(document.querySelectorAll("[data-message-author-role]"))
       .filter((node) => {
         const role = String(node.getAttribute("data-message-author-role") || "").toLowerCase();
         return role === "user" || role === "assistant";
       });
-
     if (roleNodes.length) return roleNodes;
-
     return Array.from(document.querySelectorAll('[data-testid*="conversation-turn" i], main article'))
       .filter((node) => getVisibleText(node));
   }
@@ -284,48 +290,28 @@
     const clone = source.cloneNode(true);
     const originalImages = Array.from(source.querySelectorAll("img"));
     const removeSelectors = [
-      "script",
-      "style",
-      "noscript",
-      "iframe",
-      "object",
-      "embed",
-      "form",
-      "input",
-      "textarea",
-      "select",
-      "canvas",
-      `[${CONTROL_ATTR}]`,
-      "[data-cgpt-ts]",
-      "[data-cgpt-ts-row]",
+      "script", "style", "noscript", "iframe", "object", "embed", "form", "input", "textarea", "select", "canvas",
+      `[${CONTROL_ATTR}]`, "[data-cgpt-ts]", "[data-cgpt-ts-row]",
     ].join(", ");
-
     clone.querySelectorAll(removeSelectors).forEach((node) => node.remove());
-
     clone.querySelectorAll("button, [role='button']").forEach((node) => {
       const label = getVisibleText(node) || node.getAttribute("aria-label") || node.getAttribute("title") || "";
       if (ACTION_LABEL_PATTERN.test(label) || !getVisibleText(node)) {
         node.remove();
         return;
       }
-
       const text = document.createElement("span");
       text.textContent = getVisibleText(node);
       node.replaceWith(text);
     });
-
     clone.querySelectorAll("svg, [aria-hidden='true']").forEach((node) => {
       if (!node.matches("img")) node.remove();
     });
-
     clone.querySelectorAll("*").forEach((node) => {
       Array.from(node.attributes).forEach((attribute) => {
-        if (/^on/iu.test(attribute.name) || attribute.name === "style") {
-          node.removeAttribute(attribute.name);
-        }
+        if (/^on/iu.test(attribute.name) || attribute.name === "style") node.removeAttribute(attribute.name);
       });
     });
-
     clone.querySelectorAll("img").forEach((image, index) => {
       const original = originalImages[index];
       const src = original?.currentSrc || original?.src || image.getAttribute("src") || "";
@@ -333,23 +319,21 @@
       image.removeAttribute("srcset");
       image.removeAttribute("sizes");
       image.removeAttribute("loading");
-      if (!image.getAttribute("alt")) image.setAttribute("alt", "Изображение из чата");
+      if (!image.getAttribute("alt")) image.setAttribute("alt", "聊天中的图片");
     });
-
     clone.querySelectorAll("a").forEach((link) => {
       const href = link.href || link.getAttribute("href") || "";
       if (href) link.setAttribute("href", href);
       link.setAttribute("target", "_blank");
       link.setAttribute("rel", "noreferrer noopener");
     });
-
     return clone;
   }
 
   function chatTitle() {
     const heading = getVisibleText(document.querySelector("main h1"));
     const raw = heading || String(document.title || "").replace(/\s*[|–—-]\s*ChatGPT\s*$/iu, "");
-    return raw || "Чат ChatGPT";
+    return raw || "ChatGPT 聊天";
   }
 
   function timestampForFilename() {
@@ -367,17 +351,13 @@
   }
 
   function normalizedComparisonText(value) {
-    return getVisibleText({ textContent: value })
-      .toLocaleLowerCase()
-      .replace(/\s+/g, " ")
-      .trim();
+    return getVisibleText({ textContent: value }).toLocaleLowerCase().replace(/\s+/g, " ").trim();
   }
 
   function createArchiveSection(node, role = getRole(node)) {
     const clone = sanitizeClone(node);
     const text = getVisibleText(clone);
     if (!text && !clone.querySelector("img, a")) return null;
-
     const section = document.createElement("section");
     section.className = "chat-export__message";
     const label = document.createElement("div");
@@ -393,7 +373,7 @@
     section.className = "chat-export__message";
     const label = document.createElement("div");
     label.className = "chat-export__role";
-    label.textContent = message.role === "user" ? "Пользователь" : "ChatGPT";
+    label.textContent = message.role === "user" ? "用户" : "ChatGPT";
     const content = document.createElement("div");
     content.className = "chat-export__plain";
     content.textContent = message.text;
@@ -417,25 +397,15 @@
     const nodes = collectMessageNodes(scope);
     const body = document.createElement("div");
     body.className = "chat-export__messages";
-
     const entries = [];
     nodes.forEach((node) => {
       const section = createArchiveSection(node);
       if (!section) return;
       body.appendChild(section);
-      entries.push({
-        node,
-        section,
-        role: getRoleKey(node),
-        text: normalizedComparisonText(getVisibleText(section)),
-      });
+      entries.push({ node, section, role: getRoleKey(node), text: normalizedComparisonText(getVisibleText(section)) });
     });
-
-    if (!body.children.length) {
-      throw new Error("Не удалось найти сообщения текущего чата.");
-    }
-
-    const title = scope ? "Фрагмент из чата ChatGPT" : chatTitle();
+    if (!body.children.length) throw new Error("无法找到当前聊天中的消息。");
+    const title = scope ? "ChatGPT 聊天片段" : chatTitle();
     const archive = { title, body, entries, plainText: "" };
     refreshPlainText(archive);
     return archive;
@@ -449,38 +419,25 @@
   function messageTextFromApi(message) {
     const content = message?.content;
     const parts = Array.isArray(content?.parts) ? content.parts : [];
-    return parts
-      .map((part) => {
-        if (typeof part === "string") return part;
-        if (typeof part?.text === "string") return part.text;
-        return "";
-      })
-      .filter(Boolean)
-      .join("\n\n")
-      .trim();
+    return parts.map((part) => typeof part === "string" ? part : typeof part?.text === "string" ? part.text : "").filter(Boolean).join("\n\n").trim();
   }
 
   function getCurrentConversationPath(data) {
     const mapping = data?.mapping || {};
     const fromCurrentNode = [];
     let nodeId = data?.current_node;
-
     while (nodeId && mapping[nodeId]) {
       fromCurrentNode.push(mapping[nodeId]);
       nodeId = mapping[nodeId]?.parent;
     }
-
     const nodes = fromCurrentNode.length
       ? fromCurrentNode.reverse()
       : Object.values(mapping).sort((a, b) => (a?.message?.create_time || 0) - (b?.message?.create_time || 0));
-
-    return nodes
-      .map((node) => {
-        const role = String(node?.message?.author?.role || "").toLowerCase();
-        const text = messageTextFromApi(node?.message);
-        return { role, text };
-      })
-      .filter((message) => (message.role === "user" || message.role === "assistant") && message.text);
+    return nodes.map((node) => {
+      const role = String(node?.message?.author?.role || "").toLowerCase();
+      const text = messageTextFromApi(node?.message);
+      return { role, text };
+    }).filter((message) => (message.role === "user" || message.role === "assistant") && message.text);
   }
 
   async function enrichArchiveWithConversation(archive, scope = null) {
@@ -488,63 +445,39 @@
     if (!archive.entries.some((entry) => entry.role === "user" || entry.role === "assistant")) return archive;
     const conversationId = getConversationId();
     if (!conversationId) return archive;
-
     try {
       const response = await fetch(`/backend-api/conversation/${encodeURIComponent(conversationId)}`, {
         credentials: "include",
         headers: { accept: "application/json" },
       });
       if (!response.ok) return archive;
-
       const messages = getCurrentConversationPath(await response.json());
       if (messages.length <= archive.entries.length) return archive;
-
       const remaining = [...archive.entries];
       const orderedSections = [];
       const nextEntries = [];
-
       messages.forEach((message) => {
         const comparable = normalizedComparisonText(message.text);
-        const index = remaining.findIndex((entry) =>
-          entry.role === message.role &&
-          comparable &&
-          (entry.text.includes(comparable) || comparable.includes(entry.text)),
-        );
+        const index = remaining.findIndex((entry) => entry.role === message.role && comparable && (entry.text.includes(comparable) || comparable.includes(entry.text)));
         const entry = index >= 0 ? remaining.splice(index, 1)[0] : null;
         const section = entry?.section || createPlainArchiveSection(message);
         if (!section) return;
         orderedSections.push(section);
-        nextEntries.push(entry || {
-          node: null,
-          section,
-          role: message.role,
-          text: comparable,
-        });
+        nextEntries.push(entry || { node: null, section, role: message.role, text: comparable });
       });
-
-      // Retain a visible DOM message if ChatGPT's API omitted it while the page was updating.
       remaining.forEach((entry) => {
         orderedSections.push(entry.section);
         nextEntries.push(entry);
       });
-
       archive.body.replaceChildren(...orderedSections);
       archive.entries = nextEntries;
       refreshPlainText(archive);
-    } catch (_error) {
-      // Exporting the visible chat is still useful when the current conversation is unavailable.
-    }
-
+    } catch (_error) {}
     return archive;
   }
 
   function escapeHtml(value) {
-    return String(value)
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-      .replace(/'/g, "&#39;");
+    return String(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
   }
 
   function documentStyles() {
@@ -572,15 +505,13 @@
   }
 
   function buildDocumentHtml(archive) {
-    return `<!doctype html>
-<html lang="ru"><head><meta charset="utf-8"><title>${escapeHtml(archive.title)}</title><style>${documentStyles()}</style></head>
-<body><main class="chat-export"><h1 class="chat-export__heading">${escapeHtml(archive.title)}</h1><p class="chat-export__meta">Экспортировано из ChatGPT · ${escapeHtml(new Date().toLocaleString("ru-RU"))}</p>${archive.body.innerHTML}</main></body></html>`;
+    return `<!doctype html>\n<html lang="zh-CN"><head><meta charset="utf-8"><title>${escapeHtml(archive.title)}</title><style>${documentStyles()}</style></head>\n<body><main class="chat-export"><h1 class="chat-export__heading">${escapeHtml(archive.title)}</h1><p class="chat-export__meta">从 ChatGPT 导出 · ${escapeHtml(new Date().toLocaleString("zh-CN"))}</p>${archive.body.innerHTML}</main></body></html>`;
   }
 
   function blobToDataUrl(blob) {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
-      reader.onerror = () => reject(reader.error || new Error("Не удалось подготовить файл."));
+      reader.onerror = () => reject(reader.error || new Error("无法准备文件。"));
       reader.onload = () => resolve(String(reader.result));
       reader.readAsDataURL(blob);
     });
@@ -588,21 +519,17 @@
 
   async function inlineImages(root) {
     const images = Array.from(root.querySelectorAll("img"));
-    await Promise.all(
-      images.map(async (image) => {
-        const source = image.currentSrc || image.getAttribute("src") || "";
-        if (!/^(?:https?:|blob:)/iu.test(source)) return;
-
-        try {
-          const response = await fetch(source, { credentials: "include" });
-          const blob = await response.blob();
-          if (!response.ok || !blob.type.startsWith("image/") || blob.size > 12 * 1024 * 1024) return;
-          image.setAttribute("src", await blobToDataUrl(blob));
-        } catch (_error) {
-          // If a CDN forbids reading an image, retain its original, working link.
-        }
-      }),
-    );
+    await Promise.all(images.map(async (image) => {
+      const source = image.currentSrc || image.getAttribute("src") || "";
+      if (!/^(?:https?:|blob:)/iu.test(source)) return;
+      try {
+        const parsed = new URL(source, location.href);
+        const response = await fetch(source, { credentials: parsed.origin === location.origin ? "include" : "omit" });
+        const blob = await response.blob();
+        if (!response.ok || !blob.type.startsWith("image/") || blob.size > 12 * 1024 * 1024) return;
+        image.setAttribute("src", await blobToDataUrl(blob));
+      } catch (_error) {}
+    }));
   }
 
   function loadImage(source) {
@@ -610,7 +537,7 @@
       const image = new Image();
       image.decoding = "async";
       image.onload = () => resolve(image);
-      image.onerror = () => reject(new Error("Не удалось прочитать изображение."));
+      image.onerror = () => reject(new Error("无法读取图片。"));
       image.src = source;
     });
   }
@@ -618,13 +545,11 @@
   async function rasterizeImage(imageElement, maxDimension = 1600) {
     const source = imageElement?.currentSrc || imageElement?.getAttribute?.("src") || "";
     if (!source) return null;
-
     try {
       const image = await loadImage(source);
       const originalWidth = image.naturalWidth || image.width;
       const originalHeight = image.naturalHeight || image.height;
       if (!originalWidth || !originalHeight) return null;
-
       const scale = Math.min(1, maxDimension / Math.max(originalWidth, originalHeight));
       const width = Math.max(1, Math.round(originalWidth * scale));
       const height = Math.max(1, Math.round(originalHeight * scale));
@@ -643,7 +568,7 @@
 
   function dataUrlToBytes(dataUrl) {
     const comma = String(dataUrl || "").indexOf(",");
-    if (comma < 0) throw new Error("Некорректные данные изображения.");
+    if (comma < 0) throw new Error("图片数据无效。");
     const binary = atob(String(dataUrl).slice(comma + 1));
     const bytes = new Uint8Array(binary.length);
     for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
@@ -655,9 +580,7 @@
     for (let start = 0; start < bytes.length; start += 8192) {
       let chunk = "";
       const end = Math.min(bytes.length, start + 8192);
-      for (let index = start; index < end; index += 1) {
-        chunk += bytes[index].toString(16).padStart(2, "0");
-      }
+      for (let index = start; index < end; index += 1) chunk += bytes[index].toString(16).padStart(2, "0");
       chunks.push(chunk);
     }
     return chunks.join("");
@@ -669,15 +592,10 @@
     for (let index = 0; index < value.length; index += 1) {
       const code = value.charCodeAt(index);
       const character = value[index];
-      if (character === "\\" || character === "{" || character === "}") {
-        result += `\\${character}`;
-      } else if (character === "\n") {
-        result += "\\line ";
-      } else if (code >= 32 && code <= 126) {
-        result += character;
-      } else {
-        result += `\\u${code > 32767 ? code - 65536 : code}?`;
-      }
+      if (character === "\\" || character === "{" || character === "}") result += `\\${character}`;
+      else if (character === "\n") result += "\\line ";
+      else if (code >= 32 && code <= 126) result += character;
+      else result += `\\u${code > 32767 ? code - 65536 : code}?`;
     }
     return result;
   }
@@ -696,27 +614,22 @@
       "{\\colortbl;\\red16\\green163\\blue127;\\red32\\green33\\blue35;}",
       "\\viewkind4\\pard\\sa180\\sl276\\slmult1\\f0\\fs22 ",
       `\\fs34\\b ${rtfEscape(archive.title)}\\b0\\fs22\\par `,
-      `\\cf2 ${rtfEscape(`Экспортировано из ChatGPT · ${new Date().toLocaleString("ru-RU")}`)}\\cf0\\par\\par `,
+      `\\cf2 ${rtfEscape(`从 ChatGPT 导出 · ${new Date().toLocaleString("zh-CN")}`)}\\cf0\\par\\par `,
     ];
-
     for (const section of archive.body.querySelectorAll(".chat-export__message")) {
       const role = getVisibleText(section.querySelector(".chat-export__role"));
       parts.push(`\\pard\\sa100\\sb120\\cf1\\b ${rtfEscape(role)}\\b0\\cf0\\par `);
       const text = textFromArchiveSection(section);
       if (text) parts.push(`\\pard\\sa160\\f0\\fs22 ${rtfEscape(text)}\\par `);
-
       const images = Array.from(section.querySelectorAll("img"));
       for (const image of images) {
         const raster = await rasterizeImage(image, 1500);
         if (!raster) continue;
         const widthGoal = Math.round(Math.min(9300, raster.width * 8));
         const heightGoal = Math.round((widthGoal * raster.height) / raster.width);
-        parts.push(
-          `\\pard\\qc{\\pict\\jpegblip\\picw${raster.width}\\pich${raster.height}\\picwgoal${widthGoal}\\pichgoal${heightGoal} ${bytesToHex(dataUrlToBytes(raster.dataUrl))}}\\par `,
-        );
+        parts.push(`\\pard\\qc{\\pict\\jpegblip\\picw${raster.width}\\pich${raster.height}\\picwgoal${widthGoal}\\pichgoal${heightGoal} ${bytesToHex(dataUrlToBytes(raster.dataUrl))}}\\par `);
       }
     }
-
     parts.push("}");
     return parts.join("");
   }
@@ -766,13 +679,8 @@
     pages.push(page);
     const margin = 76;
     const maxY = page.canvas.height - margin;
-    const newPage = () => {
-      page = createPdfCanvasPage();
-      pages.push(page);
-    };
-    const ensureSpace = (height) => {
-      if (page.y + height > maxY) newPage();
-    };
+    const newPage = () => { page = createPdfCanvasPage(); pages.push(page); };
+    const ensureSpace = (height) => { if (page.y + height > maxY) newPage(); };
     const drawLines = (text, font, color, lineHeight, gap = 0) => {
       page.context.font = font;
       const lines = wrapCanvasText(page.context, text, page.canvas.width - margin * 2);
@@ -784,17 +692,14 @@
       });
       page.y += gap;
     };
-
     drawLines(archive.title, "700 34px Arial", "#202123", 44, 8);
-    drawLines(`Экспортировано из ChatGPT · ${new Date().toLocaleString("ru-RU")}`, "20px Arial", "#6b7280", 28, 26);
-
+    drawLines(`从 ChatGPT 导出 · ${new Date().toLocaleString("zh-CN")}`, "20px Arial", "#6b7280", 28, 26);
     for (const section of archive.body.querySelectorAll(".chat-export__message")) {
       ensureSpace(44);
       const role = getVisibleText(section.querySelector(".chat-export__role"));
       drawLines(role.toUpperCase(), "700 18px Arial", "#0a8b6d", 26, 8);
       const text = textFromArchiveSection(section);
       if (text) drawLines(text, "22px Arial", "#202123", 32, 16);
-
       for (const image of section.querySelectorAll("img")) {
         const raster = await rasterizeImage(image, 1120);
         if (!raster) continue;
@@ -807,10 +712,8 @@
         page.context.drawImage(printable, margin, page.y, width, height);
         page.y += height + 22;
       }
-
       page.y += 16;
     }
-
     return pages.map((item) => dataUrlToBytes(item.canvas.toDataURL("image/jpeg", 0.91)));
   }
 
@@ -830,7 +733,6 @@
     const objects = [];
     const pageRefs = [];
     let nextObject = 3;
-
     pageImages.forEach((image) => {
       const imageRef = nextObject++;
       const contentRef = nextObject++;
@@ -842,10 +744,8 @@
       objects[pageRef] = encode(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595.28 841.89] /Resources << /XObject << /Im0 ${imageRef} 0 R >> >> /Contents ${contentRef} 0 R >>`);
       pageRefs.push(pageRef);
     });
-
     objects[1] = encode("<< /Type /Catalog /Pages 2 0 R >>");
     objects[2] = encode(`<< /Type /Pages /Count ${pageRefs.length} /Kids [${pageRefs.map((ref) => `${ref} 0 R`).join(" ")}] >>`);
-
     const header = encode("%PDF-1.4\n%âãÏÓ\n");
     const body = [header];
     const offsets = [0];
@@ -857,7 +757,6 @@
       body.push(wrapped);
       offset += wrapped.length;
     }
-
     const xrefOffset = offset;
     const xref = `xref\n0 ${nextObject}\n0000000000 65535 f \n${offsets.slice(1).map((item) => `${String(item).padStart(10, "0")} 00000 n \n`).join("")}trailer\n<< /Size ${nextObject} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
     body.push(encode(xref));
@@ -867,45 +766,24 @@
   async function requestDownload(filename, mime, content) {
     const url = await blobToDataUrl(new Blob([content], { type: mime }));
     return new Promise((resolve, reject) => {
-      chrome.runtime.sendMessage(
-        {
-          type: DOWNLOAD_MESSAGE,
-          filename,
-          url,
-        },
-        (result) => {
-          const error = chrome.runtime.lastError;
-          if (error) {
-            reject(new Error(error.message));
-            return;
-          }
-          if (!result?.ok) {
-            reject(new Error(result?.error || "Браузер не смог начать сохранение."));
-            return;
-          }
-          resolve(result);
-        },
-      );
+      chrome.runtime.sendMessage({ type: DOWNLOAD_MESSAGE, filename, url }, (result) => {
+        const error = chrome.runtime.lastError;
+        if (error) return reject(new Error(error.message));
+        if (!result?.ok) return reject(new Error(result?.error || "浏览器无法开始保存。"));
+        resolve(result);
+      });
     });
   }
 
   async function chooseSaveFile(filename, mime, extension, description) {
     if (typeof window.showSaveFilePicker !== "function") return null;
-
     try {
       return await window.showSaveFilePicker({
         suggestedName: filename,
-        types: [
-          {
-            description,
-            accept: { [mime.split(";")[0]]: [extension] },
-          },
-        ],
+        types: [{ description, accept: { [mime.split(";")[0]]: [extension] } }],
       });
     } catch (error) {
       if (error?.name === "AbortError") return false;
-      // Some Chromium profiles disable the File System Access API. The downloads
-      // fallback below still presents Chrome's own "Save as" dialog.
       return null;
     }
   }
@@ -917,7 +795,6 @@
       await writable.close();
       return;
     }
-
     await requestDownload(filename, mime, content);
   }
 
@@ -926,39 +803,21 @@
     printWindow.document.open();
     printWindow.document.write(buildDocumentHtml(archive));
     printWindow.document.close();
-
-    const print = () => {
-      printWindow.focus();
-      printWindow.print();
-    };
-
+    const print = () => { printWindow.focus(); printWindow.print(); };
     const images = Array.from(printWindow.document.images);
-    Promise.all(
-      images.map(
-        (image) =>
-          image.complete
-            ? Promise.resolve()
-            : new Promise((resolve) => {
-                image.addEventListener("load", resolve, { once: true });
-                image.addEventListener("error", resolve, { once: true });
-              }),
-      ),
-    ).then(() => window.setTimeout(print, 120));
+    Promise.all(images.map((image) => image.complete ? Promise.resolve() : new Promise((resolve) => {
+      image.addEventListener("load", resolve, { once: true });
+      image.addEventListener("error", resolve, { once: true });
+    }))).then(() => window.setTimeout(print, 120));
   }
 
   function openPdfDialog(archive, scope = null) {
     const name = safeFilename(`${archive.title} ${timestampForFilename()}`);
     const printWindow = window.open("about:blank", "_blank");
-    if (!printWindow) {
-      throw new Error("Браузер заблокировал окно печати. Разрешите всплывающие окна для chatgpt.com.");
-    }
-
-    try {
-      printWindow.opener = null;
-    } catch (_error) {}
-
+    if (!printWindow) throw new Error("浏览器阻止了打印窗口，请允许 chatgpt.com 弹出窗口。");
+    try { printWindow.opener = null; } catch (_error) {}
     printWindow.document.open();
-    printWindow.document.write("<!doctype html><title>Подготовка PDF…</title><body>Подготавливаю чат для печати…</body>");
+    printWindow.document.write("<!doctype html><title>正在准备 PDF…</title><body>正在准备聊天内容以供打印…</body>");
     printWindow.document.close();
     printWindow.document.title = name;
     void enrichArchiveWithConversation(archive, scope).then(() => printArchive(printWindow, archive));
@@ -974,7 +833,6 @@
       toast.setAttribute("aria-live", "polite");
       document.body.appendChild(toast);
     }
-
     toast.textContent = message;
     const rect = (anchor || document.getElementById(BUTTON_ID))?.getBoundingClientRect();
     const width = toast.getBoundingClientRect().width;
@@ -984,11 +842,8 @@
     toast.style.left = `${Math.round(left)}px`;
     toast.style.top = `${Math.round(top)}px`;
     toast.hidden = false;
-
     if (state.toastTimer) window.clearTimeout(state.toastTimer);
-    state.toastTimer = window.setTimeout(() => {
-      toast.hidden = true;
-    }, 4200);
+    state.toastTimer = window.setTimeout(() => { toast.hidden = true; }, 4200);
   }
 
   function closeMenu() {
@@ -1012,25 +867,11 @@
     if (!element?.isConnected || element.id === BUTTON_ID || element.closest(`[${CONTROL_ATTR}]`)) return false;
     const style = window.getComputedStyle(element);
     const rect = element.getBoundingClientRect();
-    return (
-      style.display !== "none" &&
-      style.visibility !== "hidden" &&
-      rect.width > 0 &&
-      rect.height > 0 &&
-      rect.top < 92 &&
-      rect.bottom > -4
-    );
+    return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0 && rect.top < 92 && rect.bottom > -4;
   }
 
   function headerButtonLabel(element) {
-    return [
-      element.getAttribute?.("aria-label"),
-      element.getAttribute?.("title"),
-      element.getAttribute?.("data-testid"),
-      getVisibleText(element),
-    ]
-      .filter(Boolean)
-      .join(" ");
+    return [element.getAttribute?.("aria-label"), element.getAttribute?.("title"), element.getAttribute?.("data-testid"), getVisibleText(element)].filter(Boolean).join(" ");
   }
 
   function findHeaderActions() {
@@ -1045,25 +886,17 @@
   function positionMainButton() {
     const button = document.getElementById(BUTTON_ID);
     if (!button) return;
-
     button.classList.remove("is-compact");
     let buttonRect = button.getBoundingClientRect();
     const action = findHeaderActions()[0] || null;
     const actionRect = action?.getBoundingClientRect();
     const pad = 12;
-
     if (actionRect && actionRect.left < buttonRect.width + pad * 2) {
       button.classList.add("is-compact");
       buttonRect = button.getBoundingClientRect();
     }
-
-    const left = actionRect
-      ? Math.max(pad, actionRect.left - buttonRect.width - 8)
-      : Math.max(pad, window.innerWidth - buttonRect.width - 150);
-    const top = actionRect
-      ? Math.max(pad, actionRect.top + (actionRect.height - buttonRect.height) / 2)
-      : 10;
-
+    const left = actionRect ? Math.max(pad, actionRect.left - buttonRect.width - 8) : Math.max(pad, window.innerWidth - buttonRect.width - 150);
+    const top = actionRect ? Math.max(pad, actionRect.top + (actionRect.height - buttonRect.height) / 2) : 10;
     button.style.left = `${Math.round(left)}px`;
     button.style.top = `${Math.round(top)}px`;
     button.style.visibility = "visible";
@@ -1073,34 +906,26 @@
   function positionMenu(anchor) {
     const menu = state.menu;
     if (!menu || !anchor?.isConnected) return;
-
     const rect = anchor.getBoundingClientRect();
     const menuRect = menu.getBoundingClientRect();
     const pad = 12;
     const left = Math.max(pad, Math.min(rect.right - menuRect.width, window.innerWidth - menuRect.width - pad));
-    const top = rect.bottom + 8 + menuRect.height <= window.innerHeight - pad
-      ? rect.bottom + 8
-      : Math.max(pad, rect.top - menuRect.height - 8);
+    const top = rect.bottom + 8 + menuRect.height <= window.innerHeight - pad ? rect.bottom + 8 : Math.max(pad, rect.top - menuRect.height - 8);
     menu.style.left = `${Math.round(left)}px`;
     menu.style.top = `${Math.round(top)}px`;
   }
 
   function openMenu(anchor, scope = null) {
-    if (state.menu) {
-      closeMenu();
-      return;
-    }
-
+    if (state.menu) return closeMenu();
     const menu = document.createElement("div");
     menu.id = MENU_ID;
     menu.setAttribute(CONTROL_ATTR, "1");
     menu.setAttribute("role", "menu");
-    menu.innerHTML = `<span class="cgpt-chat-export-menu__title">${scope ? "Сохранить этот фрагмент" : "Сохранить весь текущий чат"}</span>`;
-    menu.appendChild(formatButton("print", "Печать", "Откроется системное окно печати"));
-    menu.appendChild(formatButton("pdf", "PDF", "Создаст PDF-файл и предложит место сохранения"));
-    menu.appendChild(formatButton("word", "Word (.rtf)", "Документ Word с кодом и встроенными изображениями"));
-    menu.appendChild(formatButton("txt", "TXT", "Только текст сообщения и кода"));
-
+    menu.innerHTML = `<span class="cgpt-chat-export-menu__title">${scope ? "保存此片段" : "保存整个当前聊天"}</span>`;
+    menu.appendChild(formatButton("print", "打印", "将打开系统打印窗口"));
+    menu.appendChild(formatButton("pdf", "PDF", "生成 PDF 文件并选择保存位置"));
+    menu.appendChild(formatButton("word", "Word (.rtf)", "包含代码和内嵌图片的 Word 文档"));
+    menu.appendChild(formatButton("txt", "TXT", "仅导出消息和代码文本"));
     document.body.appendChild(menu);
     state.menu = menu;
     state.activeScope = scope;
@@ -1113,79 +938,59 @@
     state.exporting = true;
     const buttons = Array.from(state.menu?.querySelectorAll("button") || []);
     buttons.forEach((item) => { item.disabled = true; });
-
     try {
       const archive = buildArchive(state.activeScope);
       const filename = safeFilename(`${archive.title} ${timestampForFilename()}`);
-
       if (type === "print") {
         openPdfDialog(archive, state.activeScope);
         closeMenu();
-        showToast("Открылось системное окно печати.", button);
+        showToast("已打开系统打印窗口。", button);
         return;
       }
-
       if (type === "pdf") {
-        const handle = await chooseSaveFile(
-          `${filename}.pdf`,
-          "application/pdf",
-          ".pdf",
-          "PDF-документ",
-        );
+        const handle = await chooseSaveFile(`${filename}.pdf`, "application/pdf", ".pdf", "PDF 文档");
         if (handle === false) {
           closeMenu();
-          showToast("Сохранение отменено.", button);
+          showToast("已取消保存。", button);
           return;
         }
-        showToast("Подготавливаю PDF…", button);
+        showToast("正在生成 PDF…", button);
         await enrichArchiveWithConversation(archive, state.activeScope);
         await inlineImages(archive.body);
         const pdf = buildPdfFile(await createPdfPages(archive));
         await saveFile(handle, `${filename}.pdf`, "application/pdf", pdf);
         closeMenu();
-        showToast("PDF-файл сохранён.", button);
+        showToast("PDF 文件已保存。", button);
         return;
       }
-
       if (type === "word") {
-        const handle = await chooseSaveFile(
-          `${filename}.rtf`,
-          "application/rtf",
-          ".rtf",
-          "Документ Word",
-        );
+        const handle = await chooseSaveFile(`${filename}.rtf`, "application/rtf", ".rtf", "Word 文档");
         if (handle === false) {
           closeMenu();
-          showToast("Сохранение отменено.", button);
+          showToast("已取消保存。", button);
           return;
         }
-        showToast("Подготавливаю документ Word…", button);
+        showToast("正在生成 Word 文档…", button);
         await enrichArchiveWithConversation(archive, state.activeScope);
         await inlineImages(archive.body);
         await saveFile(handle, `${filename}.rtf`, "application/rtf", await buildWordRtf(archive));
         closeMenu();
-        showToast("Документ Word сохранён.", button);
+        showToast("Word 文档已保存。", button);
         return;
       }
-
-      const handle = await chooseSaveFile(
-        `${filename}.txt`,
-        "text/plain;charset=utf-8",
-        ".txt",
-        "Текстовый файл",
-      );
+      const handle = await chooseSaveFile(`${filename}.txt`, "text/plain;charset=utf-8", ".txt", "文本文件");
       if (handle === false) {
         closeMenu();
-        showToast("Сохранение отменено.", button);
+        showToast("已取消保存。", button);
         return;
       }
       await enrichArchiveWithConversation(archive, state.activeScope);
       await saveFile(handle, `${filename}.txt`, "text/plain;charset=utf-8", `\ufeff${archive.plainText}\n`);
       closeMenu();
-      showToast("Текстовый файл сохранён.", button);
+      showToast("文本文件已保存。", button);
     } catch (error) {
       console.warn("[ChatGPT Mods] Chat export failed:", error);
-      showToast(error?.message || "Не удалось сохранить чат.", button);
+      showToast(error?.message || "无法保存聊天。", button);
       buttons.forEach((item) => { item.disabled = false; });
     } finally {
       state.exporting = false;
@@ -1198,8 +1003,8 @@
     button.id = BUTTON_ID;
     button.type = "button";
     button.setAttribute(CONTROL_ATTR, "1");
-    button.setAttribute("aria-label", "Сохранить текущий чат");
-    button.innerHTML = `${exportIcon()}<span>Сохранить</span>`;
+    button.setAttribute("aria-label", "保存当前聊天");
+    button.innerHTML = `${exportIcon()}<span>保存</span>`;
     button.addEventListener("click", (event) => {
       event.preventDefault();
       event.stopPropagation();
@@ -1210,9 +1015,7 @@
 
   function isCopyControl(button) {
     if (!button || button.closest(`[${CONTROL_ATTR}]`)) return false;
-    const label = [button.getAttribute("aria-label"), button.getAttribute("title"), getVisibleText(button)]
-      .filter(Boolean)
-      .join(" ");
+    const label = [button.getAttribute("aria-label"), button.getAttribute("title"), getVisibleText(button)].filter(Boolean).join(" ");
     return COPY_LABEL_PATTERN.test(label);
   }
 
@@ -1232,7 +1035,7 @@
     button.className = "cgpt-chat-export-snippet";
     button.setAttribute(CONTROL_ATTR, "1");
     button.setAttribute(SNIPPET_ATTR, "1");
-    button.setAttribute("aria-label", "Сохранить фрагмент");
+    button.setAttribute("aria-label", "保存片段");
     if (floating) button.setAttribute("data-cgpt-export-floating", "1");
     button.innerHTML = exportIcon();
     button.addEventListener("click", (event) => {
@@ -1243,12 +1046,19 @@
     return button;
   }
 
-  function addCodeButtons() {
-    document.querySelectorAll("pre").forEach((pre) => {
+  function rootsWithSelector(root, selector) {
+    const matches = [];
+    if (!root) return matches;
+    if (root.nodeType === Node.ELEMENT_NODE && root.matches?.(selector)) matches.push(root);
+    root.querySelectorAll?.(selector).forEach((node) => matches.push(node));
+    return matches;
+  }
+
+  function addCodeButtons(root = document) {
+    rootsWithSelector(root, "pre").forEach((pre) => {
       if (pre.closest(`[${CONTROL_ATTR}]`) || pre.dataset.cgptExportCode === "1") return;
       const { host, copy } = findCodeToolbar(pre);
       if (!host) return;
-
       pre.dataset.cgptExportCode = "1";
       const button = createSnippetButton(pre);
       if (copy?.parentElement) {
@@ -1263,32 +1073,48 @@
     });
   }
 
-  function addCopyTextButtons() {
-    document.querySelectorAll("button").forEach((copy) => {
+  function addCopyTextButtons(root = document) {
+    rootsWithSelector(root, "button").forEach((copy) => {
       if (!isCopyControl(copy) || copy.dataset.cgptExportCopy === "1") return;
       const scope = getMessageScope(copy);
       if (!scope || !getVisibleText(scope)) return;
-
       copy.dataset.cgptExportCopy = "1";
       const button = createSnippetButton(scope);
       copy.insertAdjacentElement("afterend", button);
     });
   }
 
-  function ensure() {
+  function ensure(root = document, reposition = true) {
     ensureStyle();
     createMainButton();
-    positionMainButton();
-    addCodeButtons();
-    addCopyTextButtons();
+    if (reposition) positionMainButton();
+    addCodeButtons(root);
+    addCopyTextButtons(root);
   }
 
-  function scheduleEnsure() {
+  function nodeHasRelevantStructure(node) {
+    if (!node || node.nodeType !== Node.ELEMENT_NODE) return false;
+    if (node.matches?.(MUTATION_RELEVANT_SELECTOR)) return true;
+    return Boolean(node.querySelector?.(MUTATION_RELEVANT_SELECTOR));
+  }
+
+  function flushMutationWork() {
+    state.mutationTimer = 0;
+    const roots = Array.from(state.pendingRoots);
+    state.pendingRoots.clear();
+    createMainButton();
+    let reposition = false;
+    roots.forEach((root) => {
+      ensure(root, false);
+      if (root.matches?.("header, button, [role='button']") || root.querySelector?.("header, button, [role='button']")) reposition = true;
+    });
+    if (reposition || !document.getElementById(BUTTON_ID)) positionMainButton();
+  }
+
+  function scheduleMutationWork(root) {
+    if (root) state.pendingRoots.add(root);
     if (state.mutationTimer) return;
-    state.mutationTimer = window.setTimeout(() => {
-      state.mutationTimer = 0;
-      ensure();
-    }, 120);
+    state.mutationTimer = window.setTimeout(flushMutationWork, 80);
   }
 
   function boot() {
@@ -1309,8 +1135,17 @@
     window.addEventListener("scroll", () => {
       if (state.menu) positionMenu(state.menuAnchor || document.getElementById(BUTTON_ID));
     }, PASSIVE);
+    window.addEventListener("pageshow", () => ensure(), PASSIVE);
+    window.addEventListener("popstate", () => ensure(), PASSIVE);
 
-    const observer = new MutationObserver(scheduleEnsure);
+    const observer = new MutationObserver((mutations) => {
+      for (const mutation of mutations) {
+        for (const node of mutation.addedNodes || []) {
+          if (nodeHasRelevantStructure(node)) scheduleMutationWork(node);
+        }
+      }
+      if (!document.getElementById(BUTTON_ID)) scheduleMutationWork(document.body);
+    });
     observer.observe(document.documentElement, { childList: true, subtree: true });
   }
 
