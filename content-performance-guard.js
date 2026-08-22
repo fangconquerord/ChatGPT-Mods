@@ -25,7 +25,12 @@
     '[data-testid*="conversation-turn" i]',
     '[data-testid*="copy" i]',
     '[data-testid*="attach" i]',
-    '[data-testid*="upload" i]'
+    '[data-testid*="upload" i]',
+    '[id^="cgpt-"]',
+    '[class*="cgpt-"]',
+    '[data-cgpt-chat-export-control]',
+    '[data-cgpt-chat-export-snippet]',
+    '[data-cgpt-composer-files]'
   ].join(",");
 
   const stats = {
@@ -36,31 +41,45 @@
     suppressedBatches: 0
   };
 
+  function isElementLike(node) {
+    return Boolean(node && node.nodeType === 1 && typeof node.matches === "function");
+  }
+
   function asElement(node) {
-    if (node instanceof Element) return node;
-    return node?.parentElement instanceof Element ? node.parentElement : null;
+    if (isElementLike(node)) return node;
+    const parent = node?.parentElement;
+    return isElementLike(parent) ? parent : null;
+  }
+
+  function safeClosest(element, selector) {
+    try {
+      return element?.closest?.(selector) || null;
+    } catch (_error) {
+      return null;
+    }
   }
 
   function isInsideMessage(node) {
-    const element = asElement(node);
-    return Boolean(element?.closest?.(MESSAGE_SELECTOR));
+    return Boolean(safeClosest(asElement(node), MESSAGE_SELECTOR));
   }
 
   function addedNodeHasStructuralInterest(node) {
-    if (!(node instanceof Element)) return false;
-    if (node.matches(STRUCTURAL_SELECTOR)) return true;
-    return Boolean(node.querySelector?.(STRUCTURAL_SELECTOR));
+    if (!isElementLike(node)) return false;
+    try {
+      if (node.matches(STRUCTURAL_SELECTOR)) return true;
+      return Boolean(node.querySelector?.(STRUCTURAL_SELECTOR));
+    } catch (_error) {
+      return true;
+    }
   }
 
   function shouldSuppressMutation(mutation) {
-    if (!mutation) return false;
+    if (!mutation || !isInsideMessage(mutation.target)) return false;
 
-    // The expensive extension modules only need structural UI changes. During
-    // streaming, ChatGPT repeatedly mutates text/markdown inside an already
-    // existing conversation turn; forwarding those mutations causes multiple
-    // whole-page rescans per second in exporter/message-meta/split/organizer.
-    if (!isInsideMessage(mutation.target)) return false;
-
+    // ChatGPT streams assistant output through frequent text/markdown mutations.
+    // Extension modules that watch the whole page do not need those token-level
+    // updates. Preserve structural controls and new conversation turns, while
+    // suppressing ordinary text/layout churn inside an existing message.
     if (mutation.type === "attributes") return true;
     if (mutation.type === "characterData") return true;
     if (mutation.type !== "childList") return false;
@@ -75,7 +94,7 @@
   function filterMutations(mutations) {
     const forwarded = [];
 
-    for (const mutation of mutations) {
+    for (const mutation of mutations || []) {
       stats.seenMutations += 1;
       if (shouldSuppressMutation(mutation)) {
         stats.suppressedMutations += 1;
