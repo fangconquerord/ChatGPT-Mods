@@ -8,7 +8,7 @@
     return String(text || "")
       .normalize("NFC")
       .replace(/\u00a0/g, " ")
-      .replace(/[\u200B-\u200D\uFEFF]/g, "")
+      .replace(/[\u200B\uFEFF]/g, "")
       .replace(/\r\n?/g, "\n")
       .replace(/[ \t]+\n/g, "\n")
       .replace(/\n[ \t]+/g, "\n")
