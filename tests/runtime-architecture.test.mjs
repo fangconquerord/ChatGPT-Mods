@@ -24,13 +24,14 @@ test("runtime ships without global MutationObserver monkey patches", async () =>
   }
 });
 
-test("Chinese localization no longer performs document-wide attachment rescans", async () => {
+test("Chinese localization ignores unrelated ChatGPT streaming subtrees", async () => {
   const zh = await source("content-zh-CN.js");
   assert.doesNotMatch(zh, /normalizeNativeAttachmentLabels\(document\)/u);
   assert.doesNotMatch(zh, /attachmentCompatObserver\.observe\(document\.documentElement/u);
   assert.match(zh, /function attachAttachmentHost\(/u);
   assert.match(zh, /function attachAttachmentTray\(/u);
-  assert.match(zh, /function localizeAddedNode\(/u);
+  assert.match(zh, /function nodeNeedsLocalization\(/u);
+  assert.match(zh, /if \(!nodeNeedsLocalization\(node\)\) return/u);
 });
 
 test("message metadata processes new messages and composer changes incrementally", async () => {
@@ -59,18 +60,21 @@ test("chat organizer observes the sidebar instead of rerendering on every page m
   assert.doesNotMatch(organizer, /state\.observer\.observe\(document\.documentElement/u);
 });
 
-test("split view ignores streaming message churn", async () => {
+test("split view ignores streaming message churn and its own style writes", async () => {
   const split = await source("content-split-view.js");
   assert.match(split, /HEADER_RELEVANT_SELECTOR/u);
   assert.match(split, /function frameMutationTouchesNavigator\(/u);
   assert.match(split, /function nodeTouchesHeaderControls\(/u);
   assert.doesNotMatch(split, /const observer = new MutationObserver\(\(\) =>/u);
+  assert.match(split, /attributeFilter: \["class", "hidden", "aria-hidden"\]/u);
+  assert.doesNotMatch(split, /attributeFilter:\s*\[[^\]]*"style"/su);
 });
 
-test("prompt enhancer only reruns when composer structure appears", async () => {
+test("prompt enhancer caches the composer and ignores unrelated streaming mutations", async () => {
   const enhancer = await source("content-prompt-enhancer.js");
   assert.match(enhancer, /COMPOSER_SELECTOR/u);
   assert.match(enhancer, /function nodeTouchesComposer\(/u);
+  assert.match(enhancer, /state\.button\?\.isConnected && state\.composer\?\.isConnected/u);
   assert.doesNotMatch(enhancer, /new MutationObserver\(scheduleRun\)/u);
 });
 
